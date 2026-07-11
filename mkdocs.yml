@@ -22,6 +22,7 @@ nav:
       - Process identity: adr/0004-process-identity-abstraction.md
   - Runtime readiness:
       - Bootstrap: runtime/bootstrap.md
+      - Phase 2 core runtime: runtime/phase-2-core-runtime.md
       - Lifecycle: runtime/lifecycle.md
       - Operations: runtime/operations.md
       - Architecture audit: architecture-audit.md
