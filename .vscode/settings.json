@@ -1,0 +1,6 @@
+{
+  "editor.formatOnSave": true,
+  "files.eol": "\n",
+  "python.analysis.typeCheckingMode": "strict",
+  "rust-analyzer.check.command": "clippy"
+}

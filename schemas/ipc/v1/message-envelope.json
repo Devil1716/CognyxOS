@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cognyx.org/ipc/v1/message-envelope.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "contract_version",
+    "correlation_id",
+    "timestamp",
+    "source",
+    "classification"
+  ],
+  "properties": {
+    "request_id": { "type": "string", "format": "uuid" },
+    "contract_version": { "type": "string" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "causation_id": { "type": "string", "format": "uuid" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source": { "type": "string" },
+    "classification": { "enum": ["public", "internal", "sensitive", "restricted"] },
+    "deadline_ms": { "type": "integer", "minimum": 1 },
+    "body": { "type": "object" }
+  }
+}

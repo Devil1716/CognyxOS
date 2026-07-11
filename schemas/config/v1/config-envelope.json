@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cognyx.org/config/v1/config-envelope.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["config_version"],
+  "properties": {
+    "config_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "extends": { "type": "string" },
+    "secrets": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^secret://" }
+    }
+  }
+}

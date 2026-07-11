@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cognyx.org/capabilities/v1/capability-descriptor.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "capability_id",
+    "version",
+    "input_schema",
+    "output_schema",
+    "required_permissions",
+    "failure_modes",
+    "idempotency"
+  ],
+  "properties": {
+    "capability_id": { "type": "string", "pattern": "^org\\.cognyx\\.[a-z0-9_.-]+$" },
+    "version": { "type": "string" },
+    "input_schema": { "type": "string", "format": "uri-reference" },
+    "output_schema": { "type": "string", "format": "uri-reference" },
+    "required_permissions": { "type": "array", "items": { "type": "string" } },
+    "failure_modes": { "type": "array", "items": { "type": "string" } },
+    "idempotency": { "enum": ["required", "supported", "not_supported"] },
+    "rollback": { "enum": ["supported", "unsupported", "compensating"] }
+  }
+}

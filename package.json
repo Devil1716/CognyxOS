@@ -1,0 +1,32 @@
+{
+  "name": "cognyxos",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "bootstrap": "pnpm install && python -m pip install -e ./python/cognyx_runtime[test,docs]",
+    "build": "pnpm -r --if-present build && cargo check --workspace",
+    "test": "pnpm -r --if-present test && python -m pytest python/cognyx_runtime/tests",
+    "lint": "pnpm -r --if-present lint && python -m ruff check python/cognyx_runtime && cargo clippy --workspace -- -D warnings",
+    "format": "prettier --check . && python -m ruff format --check python/cognyx_runtime && cargo fmt --check",
+    "format:fix": "prettier --write . && python -m ruff format python/cognyx_runtime && cargo fmt",
+    "docs": "mkdocs build --strict",
+    "dev": "pnpm --filter @cognyx/desktop dev",
+    "test:e2e": "playwright test",
+    "audit": "pnpm audit --prod"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^24.10.1",
+    "eslint": "^9.39.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.3",
+    "vitest": "^4.0.10"
+  }
+}

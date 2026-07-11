@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cognyx.org/events/v1/event-envelope.json",
+  "title": "CognyxOS Event Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "contract_version",
+    "correlation_id",
+    "timestamp",
+    "source",
+    "classification",
+    "priority",
+    "payload"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "type": "string", "pattern": "^org\\.cognyx\\.[a-z0-9_.-]+$" },
+    "event_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "contract_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "causation_id": { "type": "string", "format": "uuid" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source": { "type": "string" },
+    "tenant_scope": { "type": "string" },
+    "classification": { "enum": ["public", "internal", "sensitive", "restricted"] },
+    "aggregate_id": { "type": "string" },
+    "priority": { "enum": ["critical", "high", "normal", "low"] },
+    "replay": { "type": "boolean", "default": false },
+    "payload": { "type": "object" }
+  }
+}

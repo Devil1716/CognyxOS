@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cognyx.org/events/v1/standard-events.json",
+  "title": "CognyxOS Standard Event Payloads",
+  "$defs": {
+    "application_started": {
+      "type": "object",
+      "required": ["application_id", "instance_id", "version"],
+      "properties": {
+        "application_id": { "type": "string" },
+        "instance_id": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "application_stopped": {
+      "type": "object",
+      "required": ["application_id", "instance_id", "reason"],
+      "properties": {
+        "application_id": { "type": "string" },
+        "instance_id": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "window_opened": {
+      "type": "object",
+      "required": ["window_id", "application_id"],
+      "properties": { "window_id": { "type": "string" }, "application_id": { "type": "string" } }
+    },
+    "window_closed": {
+      "type": "object",
+      "required": ["window_id", "reason"],
+      "properties": { "window_id": { "type": "string" }, "reason": { "type": "string" } }
+    },
+    "agent_started": {
+      "type": "object",
+      "required": ["agent_id", "run_id", "goal_id"],
+      "properties": {
+        "agent_id": { "type": "string" },
+        "run_id": { "type": "string" },
+        "goal_id": { "type": "string" }
+      }
+    },
+    "agent_finished": {
+      "type": "object",
+      "required": ["agent_id", "run_id", "outcome"],
+      "properties": {
+        "agent_id": { "type": "string" },
+        "run_id": { "type": "string" },
+        "outcome": { "type": "string" }
+      }
+    },
+    "task_created": {
+      "type": "object",
+      "required": ["task_id", "goal_id", "kind", "priority"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "goal_id": { "type": "string" },
+        "kind": { "type": "string" },
+        "priority": { "type": "string" }
+      }
+    },
+    "task_completed": {
+      "type": "object",
+      "required": ["task_id", "outcome", "result_ref"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "outcome": { "type": "string" },
+        "result_ref": { "type": "string" }
+      }
+    },
+    "tool_executed": {
+      "type": "object",
+      "required": ["tool_id", "invocation_id", "outcome"],
+      "properties": {
+        "tool_id": { "type": "string" },
+        "invocation_id": { "type": "string" },
+        "outcome": { "type": "string" }
+      }
+    },
+    "permission_requested": {
+      "type": "object",
+      "required": ["request_id", "capability", "risk_level"],
+      "properties": {
+        "request_id": { "type": "string" },
+        "capability": { "type": "string" },
+        "risk_level": { "type": "string" }
+      }
+    },
+    "notification_created": {
+      "type": "object",
+      "required": ["notification_id", "category", "title"],
+      "properties": {
+        "notification_id": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "string" }
+      }
+    },
+    "voice_session_started": {
+      "type": "object",
+      "required": ["session_id", "mode"],
+      "properties": { "session_id": { "type": "string" }, "mode": { "type": "string" } }
+    },
+    "voice_session_ended": {
+      "type": "object",
+      "required": ["session_id", "reason"],
+      "properties": { "session_id": { "type": "string" }, "reason": { "type": "string" } }
+    },
+    "memory_updated": {
+      "type": "object",
+      "required": ["memory_id", "operation", "revision"],
+      "properties": {
+        "memory_id": { "type": "string" },
+        "operation": { "type": "string" },
+        "revision": { "type": "integer" }
+      }
+    },
+    "model_loaded": {
+      "type": "object",
+      "required": ["provider_id", "model_id", "instance_id"],
+      "properties": {
+        "provider_id": { "type": "string" },
+        "model_id": { "type": "string" },
+        "instance_id": { "type": "string" }
+      }
+    },
+    "model_unloaded": {
+      "type": "object",
+      "required": ["provider_id", "model_id", "reason"],
+      "properties": {
+        "provider_id": { "type": "string" },
+        "model_id": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "system_booted": {
+      "type": "object",
+      "required": ["boot_id", "platform", "version"],
+      "properties": {
+        "boot_id": { "type": "string" },
+        "platform": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "system_shutdown": {
+      "type": "object",
+      "required": ["shutdown_id", "reason", "deadline"],
+      "properties": {
+        "shutdown_id": { "type": "string" },
+        "reason": { "type": "string" },
+        "deadline": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

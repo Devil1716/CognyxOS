@@ -1,0 +1,31 @@
+site_name: CognyxOS Engineering
+site_description: Phase 1 engineering foundation
+theme:
+  name: mkdocs
+nav:
+  - Overview: index.md
+  - Development setup: development.md
+  - Architecture: architecture.md
+  - Platform contracts: contracts/platform-contracts.md
+  - Event system: contracts/events.md
+  - IPC and registry: contracts/ipc-and-registry.md
+  - Capabilities and tools: contracts/capabilities-tools.md
+  - Lifecycles and task graph: contracts/lifecycles.md
+  - Plugins and model providers: contracts/plugins-models.md
+  - Security and observability: contracts/security-configuration-observability.md
+  - API standards: contracts/api-standards.md
+  - Readiness report: readiness-report.md
+  - ADRs:
+      - Local IPC and events: adr/0001-local-grpc-and-durable-events.md
+      - Protobuf strategy: adr/0002-protobuf-generation-with-buf.md
+      - Event store: adr/0003-sqlite-event-store.md
+      - Process identity: adr/0004-process-identity-abstraction.md
+  - Runtime readiness:
+      - Bootstrap: runtime/bootstrap.md
+      - Lifecycle: runtime/lifecycle.md
+      - Operations: runtime/operations.md
+      - Architecture audit: architecture-audit.md
+      - Final readiness report: runtime-readiness-report.md
+      - Phase 2 handoff: phase-2-handoff.md
+  - Contributing: contributing.md
+  - Standards: standards.md
