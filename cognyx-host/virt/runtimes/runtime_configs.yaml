@@ -1,0 +1,187 @@
+# CognyxOS Runtime Configurations
+
+Runtime-specific VM configurations for different execution environments.
+
+## Linux Runtime
+
+```yaml
+runtime: linux
+description: Native Linux execution environment
+vm_type: firecracker
+resources:
+  vcpus: 2
+  memory_mb: 2048
+  disk_gb: 20
+capabilities:
+  - filesystem
+  - network
+  - process_execution
+  - ipc
+boot:
+  kernel: /usr/share/cognyx/linux/vmlinux
+  initrd: /usr/share/cognyx/linux/initramfs.cpio.gz
+  cmdline: "console=ttyS0 quiet panic=1"
+security:
+  seccomp: true
+  apparmor_profile: cognyx-linux-guest
+  capabilities_drop: all
+network:
+  type: nat
+  bridge: cognyx-linux-net
+  dns: 8.8.8.8
+```
+
+## Windows Runtime
+
+```yaml
+runtime: windows
+description: Windows 10/11 sandbox execution
+vm_type: qemu
+resources:
+  vcpus: 4
+  memory_mb: 8192
+  disk_gb: 100
+  gpu_passthrough: optional
+capabilities:
+  - gui_application
+  - directx
+  - audio
+  - clipboard
+boot:
+  uefi: true
+  secure_boot: true
+  tpm: vtpm
+  ovmf_code: /usr/share/OVMF/OVMF_CODE.secboot.fd
+  ovmf_vars: /usr/share/OVMF/OVMF_VARS.secboot.fd
+security:
+  isolation: full_vm
+  network_filter: strict
+  usb_redirect: disabled
+network:
+  type: nat
+  bridge: cognyx-windows-net
+  port_forwarding:
+    - host_port: 3389
+      guest_port: 3389
+      protocol: tcp
+drivers:
+  virtio: /usr/share/virtio-win/virtio-win.iso
+  spice: enabled
+```
+
+## macOS Runtime
+
+```yaml
+runtime: macos
+description: macOS sandbox execution (Apple Silicon or Intel)
+vm_type: qemu
+platform_requirement: apple_silicon_or_intel_with_license
+resources:
+  vcpus: 6
+  memory_mb: 8192
+  disk_gb: 100
+capabilities:
+  - cocoa_ui
+  - metal_gpu
+  - audio
+  - continuity
+boot:
+  machine_type: q35
+  cpu_model: Penryn  # Or Apple Silicon emulation
+  kernelsupport: true
+  osk_key: required
+security:
+  isolation: full_vm
+  sip_enabled: true
+  gatekeeper: enabled
+network:
+  type: nat
+  bridge: cognyx-macos-net
+  emulated_nic: vmxnet3
+devices:
+  applesmc: required
+  usb_tables: enabled
+  audio_codec: hda
+```
+
+## Android Runtime
+
+```yaml
+runtime: android
+description: Android container/VM execution
+vm_type: qemu_or_container
+resources:
+  vcpus: 4
+  memory_mb: 4096
+  disk_gb: 32
+capabilities:
+  - touch_input
+  - sensors
+  - telephony_emulation
+  - gps
+boot:
+  kernel: /usr/share/android/kernel.img
+  ramdisk: /usr/share/android/ramdisk.img
+  system_image: /usr/share/android/system.img
+  vendor_image: /usr/share/android/vendor.img
+security:
+  selinux: enforcing
+  verified_boot: enabled
+  sandboxing: per_app
+network:
+  type: nat
+  bridge: cognyx-android-net
+  port_forwarding:
+    - host_port: 5555
+      guest_port: 5555
+      protocol: tcp
+sensors:
+  accelerometer: emulated
+  gyroscope: emulated
+  gps: mock_location
+```
+
+## Cloud Runtime
+
+```yaml
+runtime: cloud
+description: Remote cloud execution (AWS/GCP/Azure)
+vm_type: remote
+resources:
+  vcpus: variable
+  memory_mb: variable
+  disk_gb: variable
+capabilities:
+  - scalable_compute
+  - distributed_storage
+  - serverless_functions
+provisioning:
+  provider: aws_or_gcp_or_azure
+  instance_type: auto_select
+  region: nearest
+  spot_instances: enabled
+security:
+  encryption_at_rest: true
+  encryption_in_transit: true
+  vpc_isolation: true
+  iam_role: cognyx-cloud-executor
+network:
+  type: vpc
+  private_subnet: true
+  nat_gateway: true
+  security_groups:
+    - allow_outbound_https
+    - allow_vpc_internal
+```
+
+## Common Configuration Elements
+
+All runtimes share these common elements:
+
+- **VSOCK CID**: Unique identifier for host-guest communication
+- **Capability Interface**: Standardized protobuf API
+- **Snapshot Support**: ZFS/Btrfs integration for instant snapshots
+- **Resource Limits**: Cgroup-based CPU, memory, I/O limits
+- **Logging**: Structured logging to central collector
+- **Metrics**: Prometheus-compatible metrics endpoint
+- **Health Checks**: Periodic liveness and readiness probes
