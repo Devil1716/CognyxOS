@@ -1,0 +1,87 @@
+# Cgroup v2 Configuration for CognyxOS
+# Provides resource isolation between VMs and host services
+
+# Mount cgroup2 filesystem
+mount -t cgroup2 none /sys/fs/cgroup
+
+# Enable controllers
+echo "+memory +cpu +io +pids" > /sys/fs/cgroup/cgroup.subtree_control
+
+# Create hierarchy for CognyxOS workloads
+mkdir -p /sys/fs/cgroup/cognyx
+mkdir -p /sys/fs/cgroup/cognyx/vms
+mkdir -p /sys/fs/cgroup/cognyx/capabilities
+mkdir -p /sys/fs/cgroup/cognyx/host-services
+mkdir -p /sys/fs/cgroup/cognyx/background
+
+# ============================================
+# VM Isolation
+# ============================================
+# Each VM gets dedicated memory and CPU limits
+# Prevents VM escape through resource exhaustion
+
+# Windows Runtime VM
+mkdir -p /sys/fs/cgroup/cognyx/vms/windows-vm
+echo "5368709120" > /sys/fs/cgroup/cognyx/vms/windows-vm/memory.max  # 5GB
+echo "400000 500000" > /sys/fs/cgroup/cognyx/vms/windows-vm/cpu.max  # 4 CPUs
+echo "1000" > /sys/fs/cgroup/cognyx/vms/windows-vm/pids.max
+
+# macOS Runtime VM  
+mkdir -p /sys/fs/cgroup/cognyx/vms/macos-vm
+echo "8589934592" > /sys/fs/cgroup/cognyx/vms/macos-vm/memory.max  # 8GB
+echo "600000 700000" > /sys/fs/cgroup/cognyx/vms/macos-vm/cpu.max  # 6 CPUs
+echo "1000" > /sys/fs/cgroup/cognyx/vms/macos-vm/pids.max
+
+# Linux Runtime VM
+mkdir -p /sys/fs/cgroup/cognyx/vms/linux-vm
+echo "2147483648" > /sys/fs/cgroup/cognyx/vms/linux-vm/memory.max  # 2GB
+echo "200000 300000" > /sys/fs/cgroup/cognyx/vms/linux-vm/cpu.max  # 2 CPUs
+echo "500" > /sys/fs/cgroup/cognyx/vms/linux-vm/pids.max
+
+# ============================================
+# Capability Execution (Real-time)
+# ============================================
+# Highest priority for capability runtime
+# Guaranteed CPU time and low-latency memory
+
+echo "max" > /sys/fs/cgroup/cognyx/capabilities/cpu.max
+echo "rt" > /sys/fs/cgroup/cognyx/capabilities/cpu.weight
+echo "1073741824" > /sys/fs/cgroup/cognyx/capabilities/memory.high  # Soft limit 1GB
+echo "2147483648" > /sys/fs/cgroup/cognyx/capabilities/memory.max   # Hard limit 2GB
+
+# Configure memory pressure handling
+echo "1000000 70 2000000 90" > /sys/fs/cgroup/cognyx/capabilities/memory.pressure_level
+
+# ============================================
+# Host Services
+# ============================================
+# Essential host services (networking, storage, virt management)
+
+echo "300000 400000" > /sys/fs/cgroup/cognyx/host-services/cpu.max
+echo "normal" > /sys/fs/cgroup/cognyx/host-services/cpu.weight
+echo "1073741824" > /sys/fs/cgroup/cognyx/host-services/memory.max  # 1GB
+
+# ============================================
+# Background Tasks
+# ============================================
+# Lowest priority for updates, logs, metrics collection
+
+echo "100000 200000" > /sys/fs/cgroup/cognyx/background/cpu.max
+echo "idle" > /sys/fs/cgroup/cognyx/background/cpu.weight
+echo "536870912" > /sys/fs/cgroup/cognyx/background/memory.max  # 512MB
+
+# Throttle I/O for background tasks
+echo "8:0 rbps=max wbps=52428800 riops=max wiops=1000" > /sys/fs/cgroup/cognyx/background/io.max
+
+# ============================================
+# OOM Configuration
+# ============================================
+# Protect critical services from OOM killer
+
+echo "1" > /sys/fs/cgroup/cognyx/capabilities/memory.oom.group
+echo "0" > /sys/fs/cgroup/cognyx/host-services/memory.oom.group
+echo "0" > /sys/fs/cgroup/cognyx/vms/windows-vm/memory.oom.group
+echo "0" > /sys/fs/cgroup/cognyx/vms/macos-vm/memory.oom.group
+
+# Enable OOM killer for background tasks first
+echo "1" > /sys/fs/cgroup/cognyx/background/memory.oom.group

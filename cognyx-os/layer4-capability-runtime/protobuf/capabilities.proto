@@ -1,0 +1,621 @@
+syntax = "proto3";
+
+package cognyx.capabilities.v1;
+
+option go_package = "github.com/cognyx/os/proto/capabilities";
+option java_package = "com.cognyx.os.proto.capabilities";
+option py_generic_services = true;
+
+// ============================================================================
+// CAPABILITY SERVICE - Universal interface for all execution environments
+// ============================================================================
+
+service CapabilityService {
+  // Vision capabilities
+  rpc ReadScreen(ReadScreenRequest) returns (ReadScreenResponse);
+  rpc DetectObjects(DetectObjectsRequest) returns (DetectObjectsResponse);
+  rpc PerformOCR(PerformOCRRequest) returns (PerformOCRResponse);
+  
+  // Input capabilities
+  rpc Click(ClickRequest) returns (ClickResponse);
+  rpc Type(TypeRequest) returns (TypeResponse);
+  rpc Scroll(ScrollRequest) returns (ScrollResponse);
+  rpc Hotkey(HotkeyRequest) returns (HotkeyResponse);
+  rpc MouseMove(MouseMoveRequest) returns (MouseMoveResponse);
+  
+  // Audio capabilities
+  rpc RecordAudio(RecordAudioRequest) returns (RecordAudioResponse);
+  rpc PlayAudio(PlayAudioRequest) returns (PlayAudioResponse);
+  rpc SpeechToText(SpeechToTextRequest) returns (SpeechToTextResponse);
+  rpc TextToSpeech(TextToSpeechRequest) returns (TextToSpeechResponse);
+  
+  // System capabilities
+  rpc OpenApplication(OpenApplicationRequest) returns (OpenApplicationResponse);
+  rpc CloseApplication(CloseApplicationRequest) returns (CloseApplicationResponse);
+  rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
+  rpc GetWindowInfo(GetWindowInfoRequest) returns (GetWindowInfoResponse);
+  
+  // Filesystem capabilities
+  rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
+  rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
+  rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse);
+  rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse);
+  rpc DeletePath(DeletePathRequest) returns (DeletePathResponse);
+  rpc MovePath(MovePathRequest) returns (MovePathResponse);
+  
+  // Network capabilities
+  rpc HTTPRequest(HTTPRequestRequest) returns (HTTPRequestResponse);
+  rpc WebSocketConnect(WebSocketConnectRequest) returns (WebSocketConnectResponse);
+  
+  // Clipboard capabilities
+  rpc CopyToClipboard(CopyToClipboardRequest) returns (CopyToClipboardResponse);
+  rpc PasteFromClipboard(PasteFromClipboardRequest) returns (PasteFromClipboardResponse);
+  rpc ClearClipboard(ClearClipboardRequest) returns (ClearClipboardResponse);
+  
+  // Notification capabilities
+  rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+  rpc ListenNotifications(ListenNotificationsRequest) returns (stream NotificationEvent);
+}
+
+// ============================================================================
+// VISION MESSAGES
+// ============================================================================
+
+message ReadScreenRequest {
+  int32 x = 1;
+  int32 y = 2;
+  int32 width = 3;
+  int32 height = 4;
+  ScreenFormat format = 5 [default = PNG];
+  int32 quality = 6; // 1-100 for lossy formats
+}
+
+message ReadScreenResponse {
+  bytes image_data = 1;
+  string format = 2;
+  int32 width = 3;
+  int32 height = 4;
+  int64 timestamp = 5;
+}
+
+message DetectObjectsRequest {
+  bytes image_data = 1;
+  repeated string object_classes = 2; // Classes to detect
+  float confidence_threshold = 3 [default = 0.5];
+}
+
+message DetectedObject {
+  string class = 1;
+  float confidence = 2;
+  BoundingBox bounding_box = 3;
+}
+
+message BoundingBox {
+  int32 x = 1;
+  int32 y = 2;
+  int32 width = 3;
+  int32 height = 4;
+}
+
+message DetectObjectsResponse {
+  repeated DetectedObject objects = 1;
+  int64 processing_time_ms = 2;
+}
+
+message PerformOCRRequest {
+  bytes image_data = 1;
+  string language = 2 [default = "en"];
+  OCRMode mode = 3 [default = STANDARD];
+}
+
+message PerformOCRResponse {
+  string text = 1;
+  repeated TextRegion regions = 2;
+  int64 processing_time_ms = 3;
+}
+
+message TextRegion {
+  string text = 1;
+  BoundingBox bounding_box = 2;
+  float confidence = 3;
+}
+
+enum ScreenFormat {
+  PNG = 0;
+  JPEG = 1;
+  WEBP = 2;
+  BMP = 3;
+}
+
+enum OCRMode {
+  STANDARD = 0;
+  FAST = 1;
+  ACCURATE = 2;
+}
+
+// ============================================================================
+// INPUT MESSAGES
+// ============================================================================
+
+message ClickRequest {
+  int32 x = 1;
+  int32 y = 2;
+  MouseButton button = 3 [default = LEFT];
+  int32 modifiers = 4; // Bitmask of ModifierKeys
+  int32 click_count = 5 [default = 1];
+}
+
+message ClickResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message TypeRequest {
+  string text = 1;
+  int32 delay_ms = 2 [default = 10]; // Delay between keystrokes
+  bool preserve_case = 3 [default = true];
+}
+
+message TypeResponse {
+  bool success = 1;
+  int32 characters_typed = 2;
+}
+
+message ScrollRequest {
+  int32 x = 1;
+  int32 y = 2;
+  int32 delta_x = 3;
+  int32 delta_y = 4;
+  ScrollUnit unit = 5 [default = PIXELS];
+}
+
+message ScrollResponse {
+  bool success = 1;
+}
+
+message HotkeyRequest {
+  repeated string keys = 1; // e.g., ["ctrl", "c"]
+  int32 hold_duration_ms = 2 [default = 50];
+}
+
+message HotkeyResponse {
+  bool success = 1;
+}
+
+message MouseMoveRequest {
+  int32 x = 1;
+  int32 y = 2;
+  bool absolute = 3 [default = true];
+  int32 duration_ms = 4 [default = 0]; // 0 = instant
+}
+
+message MouseMoveResponse {
+  bool success = 1;
+}
+
+enum MouseButton {
+  LEFT = 0;
+  RIGHT = 1;
+  MIDDLE = 2;
+}
+
+enum ScrollUnit {
+  PIXELS = 0;
+  LINES = 1;
+  PAGES = 2;
+}
+
+// ModifierKeys bitmask constants:
+// 1 = SHIFT, 2 = CTRL, 4 = ALT, 8 = META/SUPER
+
+// ============================================================================
+// AUDIO MESSAGES
+// ============================================================================
+
+message RecordAudioRequest {
+  int32 duration_seconds = 1;
+  int32 sample_rate = 2 [default = 44100];
+  int32 channels = 3 [default = 1];
+  AudioFormat format = 4 [default = WAV];
+}
+
+message RecordAudioResponse {
+  bytes audio_data = 1;
+  string format = 2;
+  int32 sample_rate = 3;
+  int32 channels = 4;
+  int64 duration_ms = 5;
+}
+
+message PlayAudioRequest {
+  bytes audio_data = 1;
+  AudioFormat format = 2;
+  float volume = 3 [default = 1.0];
+}
+
+message PlayAudioResponse {
+  bool success = 1;
+  int64 playback_duration_ms = 2;
+}
+
+message SpeechToTextRequest {
+  bytes audio_data = 1;
+  string language = 2 [default = "en-US"];
+  bool show_alternatives = 3 [default = false];
+}
+
+message SpeechToTextResponse {
+  string text = 1;
+  float confidence = 2;
+  repeated AlternativeResult alternatives = 3;
+}
+
+message TextToSpeechRequest {
+  string text = 1;
+  string language = 2 [default = "en-US"];
+  string voice_id = 3;
+  float speed = 4 [default = 1.0];
+  float pitch = 5 [default = 1.0];
+}
+
+message TextToSpeechResponse {
+  bytes audio_data = 1;
+  string format = 2;
+  int64 duration_ms = 3;
+}
+
+message AlternativeResult {
+  string text = 1;
+  float confidence = 2;
+}
+
+enum AudioFormat {
+  WAV = 0;
+  MP3 = 1;
+  OGG = 2;
+  FLAC = 3;
+}
+
+// ============================================================================
+// SYSTEM MESSAGES
+// ============================================================================
+
+message OpenApplicationRequest {
+  string application_name = 1;
+  repeated string arguments = 2;
+  string working_directory = 3;
+  map<string, string> environment = 4;
+  bool hidden = 5 [default = false];
+}
+
+message OpenApplicationResponse {
+  bool success = 1;
+  int32 process_id = 2;
+  string window_handle = 3;
+  string error_message = 4;
+}
+
+message CloseApplicationRequest {
+  oneof target {
+    int32 process_id = 1;
+    string window_handle = 2;
+    string application_name = 3;
+  }
+  bool force = 4 [default = false];
+}
+
+message CloseApplicationResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message ListProcessesRequest {
+  string filter_by_name = 1;
+  int32 filter_by_user = 2;
+  ProcessState filter_by_state = 3;
+}
+
+message ListProcessesResponse {
+  repeated ProcessInfo processes = 1;
+}
+
+message ProcessInfo {
+  int32 pid = 1;
+  string name = 2;
+  string command_line = 3;
+  int32 user_id = 4;
+  ProcessState state = 5;
+  int64 memory_usage_bytes = 6;
+  float cpu_usage_percent = 7;
+  int64 start_time = 8;
+}
+
+enum ProcessState {
+  RUNNING = 0;
+  SLEEPING = 1;
+  STOPPED = 2;
+  ZOMBIE = 3;
+}
+
+message GetWindowInfoRequest {
+  oneof target {
+    int32 process_id = 1;
+    string window_handle = 2;
+  }
+}
+
+message GetWindowInfoResponse {
+  string title = 1;
+  int32 x = 2;
+  int32 y = 3;
+  int32 width = 4;
+  int32 height = 5;
+  bool is_visible = 6;
+  bool is_focused = 7;
+  bool is_minimized = 8;
+  bool is_maximized = 9;
+}
+
+// ============================================================================
+// FILESYSTEM MESSAGES
+// ============================================================================
+
+message ReadFileRequest {
+  string path = 1;
+  int64 offset = 2 [default = 0];
+  int64 length = 3 [default = -1]; // -1 = read all
+  FileEncoding encoding = 4 [default = UTF8];
+}
+
+message ReadFileResponse {
+  bytes content = 1;
+  string content_string = 2;
+  int64 size_bytes = 3;
+  FileMetadata metadata = 4;
+}
+
+message WriteFileRequest {
+  string path = 1;
+  bytes content = 2;
+  string content_string = 3;
+  FileEncoding encoding = 4 [default = UTF8];
+  bool create_parent_dirs = 5 [default = true];
+  bool overwrite = 6 [default = false];
+  FilePermissions permissions = 7;
+}
+
+message WriteFileResponse {
+  bool success = 1;
+  int64 bytes_written = 2;
+  string error_message = 3;
+}
+
+message ListDirectoryRequest {
+  string path = 1;
+  string pattern = 2 [default = "*"];
+  bool include_hidden = 3 [default = false];
+  bool recursive = 4 [default = false];
+}
+
+message ListDirectoryResponse {
+  repeated DirectoryEntry entries = 1;
+  string error_message = 2;
+}
+
+message DirectoryEntry {
+  string name = 1;
+  string path = 2;
+  FileType type = 3;
+  int64 size_bytes = 4;
+  int64 modified_time = 5;
+  FilePermissions permissions = 6;
+}
+
+message CreateDirectoryRequest {
+  string path = 1;
+  bool create_parent_dirs = 2 [default = true];
+  FilePermissions permissions = 3;
+}
+
+message CreateDirectoryResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message DeletePathRequest {
+  string path = 1;
+  bool recursive = 2 [default = false];
+  bool force = 3 [default = false];
+}
+
+message DeletePathResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message MovePathRequest {
+  string source_path = 1;
+  string destination_path = 2;
+  bool overwrite = 3 [default = false];
+}
+
+message MovePathResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message FileMetadata {
+  string path = 1;
+  FileType type = 2;
+  int64 size_bytes = 3;
+  int64 created_time = 4;
+  int64 modified_time = 5;
+  int64 accessed_time = 6;
+  FilePermissions permissions = 7;
+  string owner = 8;
+  string group = 9;
+}
+
+enum FileType {
+  FILE = 0;
+  DIRECTORY = 1;
+  SYMLINK = 2;
+  SOCKET = 3;
+  DEVICE = 4;
+}
+
+enum FileEncoding {
+  UTF8 = 0;
+  ASCII = 1;
+  LATIN1 = 2;
+  BINARY = 3;
+}
+
+message FilePermissions {
+  bool user_read = 1 [default = true];
+  bool user_write = 2 [default = true];
+  bool user_execute = 3 [default = false];
+  bool group_read = 4 [default = true];
+  bool group_write = 5 [default = false];
+  bool group_execute = 6 [default = false];
+  bool other_read = 7 [default = true];
+  bool other_write = 8 [default = false];
+  bool other_execute = 9 [default = false];
+}
+
+// ============================================================================
+// NETWORK MESSAGES
+// ============================================================================
+
+message HTTPRequestRequest {
+  string url = 1;
+  HttpMethod method = 2 [default = GET];
+  map<string, string> headers = 3;
+  bytes body = 4;
+  int32 timeout_seconds = 5 [default = 30];
+  bool follow_redirects = 6 [default = true];
+  bool verify_ssl = 7 [default = true];
+}
+
+message HTTPRequestResponse {
+  int32 status_code = 1;
+  string status_text = 2;
+  map<string, string> headers = 3;
+  bytes body = 4;
+  int64 response_time_ms = 5;
+  string error_message = 6;
+}
+
+message WebSocketConnectRequest {
+  string url = 1;
+  repeated string protocols = 2;
+  map<string, string> headers = 3;
+  int32 timeout_seconds = 4 [default = 30];
+}
+
+message WebSocketConnectResponse {
+  bool success = 1;
+  string connection_id = 2;
+  string selected_protocol = 3;
+  string error_message = 4;
+}
+
+enum HttpMethod {
+  GET = 0;
+  POST = 1;
+  PUT = 2;
+  DELETE = 3;
+  PATCH = 4;
+  HEAD = 5;
+  OPTIONS = 6;
+}
+
+// ============================================================================
+// CLIPBOARD MESSAGES
+// ============================================================================
+
+message CopyToClipboardRequest {
+  oneof content {
+    string text = 1;
+    bytes image = 2;
+    bytes file_list = 3;
+  }
+  ClipboardFormat format = 4 [default = TEXT];
+}
+
+message CopyToClipboardResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message PasteFromClipboardRequest {
+  ClipboardFormat preferred_format = 1 [default = TEXT];
+}
+
+message PasteFromClipboardResponse {
+  string text = 1;
+  bytes image = 2;
+  bytes file_list = 3;
+  ClipboardFormat format = 4;
+  string error_message = 5;
+}
+
+message ClearClipboardRequest {}
+
+message ClearClipboardResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+enum ClipboardFormat {
+  TEXT = 0;
+  HTML = 1;
+  IMAGE = 2;
+  FILES = 3;
+  RTF = 4;
+}
+
+// ============================================================================
+// NOTIFICATION MESSAGES
+// ============================================================================
+
+message SendNotificationRequest {
+  string title = 1;
+  string body = 2;
+  string icon_path = 3;
+  NotificationPriority priority = 4 [default = NORMAL];
+  int32 timeout_seconds = 5 [default = 5];
+  repeated NotificationAction actions = 6;
+}
+
+message SendNotificationResponse {
+  bool success = 1;
+  string notification_id = 2;
+  string error_message = 3;
+}
+
+message NotificationAction {
+  string id = 1;
+  string label = 2;
+}
+
+message ListenNotificationsRequest {
+  repeated string app_ids = 1; // Filter by application IDs
+}
+
+message NotificationEvent {
+  string notification_id = 1;
+  string app_id = 2;
+  string title = 3;
+  string body = 4;
+  int64 timestamp = 5;
+  NotificationPriority priority = 6;
+  string action_triggered = 7;
+}
+
+enum NotificationPriority {
+  LOW = 0;
+  NORMAL = 1;
+  HIGH = 2;
+  CRITICAL = 3;
+}

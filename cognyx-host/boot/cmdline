@@ -1,0 +1,23 @@
+# CognyxOS Host Boot Configuration
+# Minimal boot sequence for bare-metal deployment
+
+# Kernel command line parameters
+console=tty0
+quiet
+loglevel=3
+cognyx.host_mode=infrastructure
+cognyx.virt_enabled=1
+cognyx.gpu_passthrough=1
+cgroup_no_v1=all
+intel_iommu=on
+amd_iommu=on
+iommu=pt
+kvm.enable_virt_at_load=1
+nvme_core.default_ps_max_latency_us=0
+pcie_aspm.policy=performance
+mitigations=off
+spectre_v2=off
+spec_store_bypass_disable=off
+
+# Note: mitigations=off is acceptable for closed environments
+# Enable mitigations in production deployments with untrusted workloads
