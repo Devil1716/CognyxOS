@@ -1,0 +1,8 @@
+[Unit]
+Description=CognyxOS Target
+Documentation=https://docs.cognyx.os
+After=network-online.target
+Wants=network-online.target
+
+[Install]
+Alias=multi-user.target
