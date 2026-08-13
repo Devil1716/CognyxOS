@@ -1,0 +1,222 @@
+syntax = "proto3";
+
+package cognyx.bus.v1;
+
+import "cognyx/common/v1/common.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "cognyxos/api/gen/go/bus/v1;busv1";
+
+// ============================================================
+//  MESSAGE ENVELOPE - canonical wire format on the message bus
+// ============================================================
+
+// All traffic on the bus wraps in this envelope.
+message MessageEnvelope {
+  // Header
+  cognyx.common.v1.Uuid message_id = 1;                              // UUID v7, monotonic time-ordered
+  MessageType type = 2;                                     // COMMAND | QUERY | RESPONSE | EVENT | STREAM_INIT | STREAM_DATA | STREAM_CLOSE | CANCEL | ACK
+  google.protobuf.Timestamp timestamp = 3;                  // TAI64N timestamp of sender
+  cognyx.common.v1.IdentityId sender = 4;                             // Sender module identity
+  Target target = 5;                                        // Unicast target OR topic
+  optional cognyx.common.v1.CapabilityToken capability = 6;           // Capability token for this action
+  cognyx.common.v1.Uuid correlation_id = 7;                           // User-facing trace
+  cognyx.common.v1.Uuid causation_id = 8;                             // Direct parent message
+  cognyx.common.v1.Priority priority = 9;
+  optional google.protobuf.Timestamp deadline = 10;         // Absolute deadline
+  optional RetryPolicy retry_policy = 11;                   // Applies to COMMAND only
+  uint32 hop_count = 12;                                    // Incremented each relay
+  bytes sender_signature = 13;                              // Ed25519 signature over sha256(fields 1-12)
+
+  // Payload
+  uint64 payload_size = 20;                                 // Expected size
+  PayloadEncoding payload_encoding = 21;                    // PROTOBUF | JSON | FLATBUFFERS
+  bytes payload_checksum_sha256 = 22;                       // Checksum of payload_bytes below
+  oneof payload {
+    google.protobuf.Any typed_payload = 23;                 // Typed proto
+    bytes raw_payload = 24;                                 // Opaque bytes
+  }
+  // Bulk data mode: > 64KB via memfd. Payload is a descriptor, FD via SCM_RIGHTS.
+  optional MemfdDescriptor memfd_payload = 25;
+
+  // Trace
+  string w3c_traceparent = 30;                              // W3C Trace Context
+  string w3c_tracestate = 31;
+}
+
+// ==================== ENUMERATIONS ====================
+
+enum MessageType {
+  MESSAGE_TYPE_UNSPECIFIED = 0;
+  COMMAND = 1;          // Imperative state change (exactly-once)
+  QUERY = 2;            // Read-only request (at-most-once)
+  RESPONSE = 3;         // Response to QUERY or COMMAND completion with result
+  EVENT = 4;            // Announcement of past event (at-least-once)
+  STREAM_INIT = 5;      // Open a bidirectional stream
+  STREAM_DATA = 6;      // Data frame in open stream
+  STREAM_CLOSE = 7;     // Final frame (closes stream half)
+  CANCEL = 8;           // Cancel in-flight command/query/stream
+  ACK = 9;              // Delivery / receive acknowledgement
+  PING = 10;            // Liveness
+  PONG = 11;            // Liveness response
+}
+
+enum PayloadEncoding {
+  PAYLOAD_ENCODING_UNSPECIFIED = 0;
+  PROTOBUF = 1;
+  JSON = 2;
+  FLATBUFFERS = 3;
+  CBOR = 4;
+}
+
+// ==================== SUB-MESSAGES ====================
+
+message Target {
+  oneof target {
+    cognyx.common.v1.IdentityId module = 1;    // Direct unicast to specific module
+    string topic = 2;                // Event topic broadcast
+    bool broadcast_all = 3;          // All modules (dangerous, requires cap: bus.broadcast_all)
+    string workspace_broadcast = 4;  // All modules within specific workspace
+  }
+}
+
+message RetryPolicy {
+  uint32 max_attempts = 1;
+  google.protobuf.Duration initial_backoff = 2;
+  double backoff_multiplier = 3;
+  google.protobuf.Duration max_backoff = 4;
+  repeated cognyx.common.v1.Error.ErrorCode retryable_errors = 5;
+}
+
+// Memfd zero-copy payload descriptor
+message MemfdDescriptor {
+  uint32 fd_index_in_ancillary = 1;   // Index into SCM_RIGHTS array
+  uint64 size_bytes = 2;
+  bytes sha256 = 3;
+  bool seal_write = 4;
+  bool seal_grow = 5;
+  bool seal_shrink = 6;
+}
+
+// ==================== SERVICE: BUS CONTROL ====================
+
+// Service used by modules to connect, register identity, manage subscriptions
+service MessageBusService {
+  // Authenticate and register module identity on connection
+  rpc RegisterModule(RegisterModuleRequest) returns (RegisterModuleResponse);
+
+  // Send single message (pattern-agnostic; determined by envelope.type)
+  rpc SendMessage(MessageEnvelope) returns (SendReceipt);
+
+  // Bidirectional streaming channel (primary transport)
+  rpc StreamMessages(stream MessageEnvelope) returns (stream MessageEnvelope);
+
+  // Durable subscription to event topic(s)
+  rpc Subscribe(SubscribeRequest) returns (stream MessageEnvelope);
+  rpc Unsubscribe(UnsubscribeRequest) returns (google.protobuf.Empty);
+
+  // Commands: submit and poll
+  rpc SubmitCommand(MessageEnvelope) returns (CommandHandle);
+  rpc GetCommandStatus(CommandHandle) returns (CommandStatus);
+  rpc CancelCommand(CommandHandle) returns (google.protobuf.Empty);
+  rpc WatchCommand(CommandHandle) returns (stream MessageEnvelope);  // Progress + completion
+
+  // Liveness
+  rpc Ping(PingRequest) returns (PongResponse);
+
+  // Dead letter queue management
+  rpc ListDeadLetterMessages(DlqListRequest) returns (DlqListResponse);
+  rpc ReplayDeadLetterMessage(DlqReplayRequest) returns (google.protobuf.Empty);
+}
+
+// ==================== MESSAGE BUS TYPES ====================
+
+message RegisterModuleRequest {
+  cognyx.common.v1.IdentityId identity = 1;
+  bytes signed_nonce = 2;                // Ed25519 signature of bus-provided nonce
+  repeated string declared_topics_publish = 3;
+  repeated string declared_topics_subscribe = 4;
+  google.protobuf.Timestamp boot_time = 5;
+}
+
+message RegisterModuleResponse {
+  bytes session_id = 1;
+  repeated cognyx.common.v1.CapabilityToken bootstrap_caps = 2;  // Initial caps
+  google.protobuf.Timestamp server_time = 3;
+  uint32 heartbeat_interval_ms = 4;  // Expected ping interval
+}
+
+message SendReceipt {
+  cognyx.common.v1.Uuid receipt_id = 1;
+  uint64 bus_offset = 2;                // Persistent WAL offset
+  google.protobuf.Timestamp received_at = 3;
+}
+
+message SubscribeRequest {
+  repeated string topic_patterns = 1;   // Shell globs allowed
+  SubscriptionMode mode = 2;
+  optional string durable_cursor_name = 3;  // Durable: resume by name
+  optional uint64 resume_from_offset = 4;    // Durable: specific WAL offset
+}
+
+enum SubscriptionMode {
+  SUBSCRIPTION_MODE_UNSPECIFIED = 0;
+  EPHEMERAL_PUSH = 1;
+  DURABLE_PUSH = 2;
+}
+
+message UnsubscribeRequest { repeated string topic_patterns = 1; }
+
+message CommandHandle { cognyx.common.v1.Uuid command_id = 1; }
+
+message CommandStatus {
+  cognyx.common.v1.Uuid command_id = 1;
+  CommandState state = 2;
+  optional cognyx.common.v1.Error error = 3;
+  optional google.protobuf.Any result = 4;
+  repeated CommandProgress progress = 5;
+  google.protobuf.Timestamp submitted_at = 6;
+  optional google.protobuf.Timestamp completed_at = 7;
+}
+
+enum CommandState {
+  COMMAND_STATE_UNSPECIFIED = 0;
+  QUEUED = 1;
+  DISPATCHED = 2;
+  EXECUTING = 3;
+  COMPLETED = 4;
+  FAILED = 5;
+  CANCELLING = 6;
+  CANCELLED = 7;
+  WAITING_HITL = 8;
+  WAITING_ESCALATION = 9;
+}
+
+message CommandProgress {
+  uint32 step = 1;
+  uint32 total_steps = 2;
+  string description = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  optional double percent_complete = 5;
+}
+
+message PingRequest { bytes nonce = 1; }
+message PongResponse { bytes nonce_echo = 1; google.protobuf.Timestamp server_time = 2; }
+
+message DlqListRequest {
+  cognyx.common.v1.PaginationRequest pagination = 1;
+  optional string target_module = 2;
+  optional cognyx.common.v1.Error.ErrorCode error_code = 3;
+}
+message DlqListResponse { repeated DeadLetterMessage messages = 1; cognyx.common.v1.PaginationResponse pagination = 2; }
+message DeadLetterMessage {
+  uint64 dlq_id = 1;
+  MessageEnvelope envelope = 2;
+  cognyx.common.v1.Error last_error = 3;
+  uint32 attempts = 4;
+  google.protobuf.Timestamp first_failed_at = 5;
+}
+message DlqReplayRequest { uint64 dlq_id = 1; }

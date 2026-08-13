@@ -1,0 +1,23 @@
+[package]
+name = "cognyx-gateway"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+serde_json = { workspace = true }
+cognyx-proto = { workspace = true }
+cognyx-execution = { path = "../../execution" }
+cognyx-capability = { path = "../../capability" }
+cognyx-planner = { path = "../planner" }
+cognyx-agent-core = { path = "../core" }

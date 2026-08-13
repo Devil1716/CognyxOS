@@ -1,0 +1,227 @@
+syntax = "proto3";
+
+package cognyx.services.runtime.v1;
+
+import "cognyx/common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "cognyxos/api/gen/go/services/runtime/v1;runtimev1";
+
+// ============================================================
+//  ENUMERATIONS
+// ============================================================
+
+enum RuntimeType {
+  RUNTIME_TYPE_UNSPECIFIED = 0;
+  NATIVE_LINUX = 1;
+  WINDOWS_VM = 2;
+  MACOS_VM = 3;
+  CONTAINER = 4;
+  REMOTE_WORKER = 5;
+}
+
+enum RuntimeState {
+  RUNTIME_STATE_UNSPECIFIED = 0;
+  CREATED = 1;
+  STARTING = 2;
+  RUNNING = 3;
+  PAUSED = 4;
+  STOPPING = 5;
+  STOPPED = 6;
+  FAILED = 7;
+  TERMINATED = 8;
+}
+
+enum StorageFormat {
+  STORAGE_FORMAT_UNSPECIFIED = 0;
+  QCOW2 = 1;
+  RAW = 2;
+  VHDX = 3;
+  VMDK = 4;
+}
+
+enum NetworkMode {
+  NETWORK_MODE_UNSPECIFIED = 0;
+  NAT = 1;
+  BRIDGE = 2;
+  ISOLATED = 3;
+  PASSTHROUGH = 4;
+}
+
+// ============================================================
+//  MESSAGE DEFINITIONS
+// ============================================================
+
+message ExecutionRuntimeSpec {
+  string runtime_id = 1;
+  string name = 2;
+  RuntimeType type = 3;
+  RuntimeState state = 4;
+  ResourceAllocation resources = 5;
+  repeated string capabilities = 6;
+  string location = 7; // "local" or remote IP/hostname
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message ResourceAllocation {
+  uint32 cpus = 1;
+  uint64 memory_bytes = 2;
+  uint64 disk_bytes = 3;
+  uint64 vram_bytes = 4;
+  bool gpu_passthrough = 5;
+}
+
+message ResourceUsageMetrics {
+  double cpu_usage_percent = 1;
+  uint64 memory_used_bytes = 2;
+  uint64 memory_total_bytes = 3;
+  uint64 disk_read_bytes = 4;
+  uint64 disk_write_bytes = 5;
+  uint64 net_rx_bytes = 6;
+  uint64 net_tx_bytes = 7;
+  double gpu_usage_percent = 8;
+}
+
+message VmConfig {
+  string vm_id = 1;
+  string name = 2;
+  RuntimeType os_type = 3;
+  ResourceAllocation resources = 4;
+  string disk_image_path = 5;
+  StorageFormat storage_format = 6;
+  NetworkMode network_mode = 7;
+  bool uefi_enabled = 8;
+  bool tpm_enabled = 9;
+  bool secure_boot = 10;
+  repeated string shared_folders = 11;
+}
+
+message ContainerConfig {
+  string container_id = 1;
+  string name = 2;
+  string image = 3;
+  repeated string command = 4;
+  repeated string env_vars = 5;
+  ResourceAllocation resources = 6;
+  repeated string volume_mounts = 7;
+  bool gpu_access = 8;
+}
+
+message VmSnapshot {
+  string snapshot_id = 1;
+  string vm_id = 2;
+  string name = 3;
+  string description = 4;
+  google.protobuf.Timestamp created_at = 5;
+  uint64 size_bytes = 6;
+}
+
+message RuntimeEvent {
+  string event_id = 1;
+  string runtime_id = 2;
+  RuntimeType runtime_type = 3;
+  string event_type = 4; // e.g. "runtime.started", "runtime.stopped", "runtime.failed"
+  string message = 5;
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+// ============================================================
+//  REQUEST / RESPONSE MESSAGES
+// ============================================================
+
+message CreateRuntimeRequest {
+  string name = 1;
+  RuntimeType type = 2;
+  ResourceAllocation resources = 3;
+  oneof config {
+    VmConfig vm_config = 4;
+    ContainerConfig container_config = 5;
+  }
+}
+
+message CreateRuntimeResponse {
+  ExecutionRuntimeSpec runtime = 1;
+}
+
+message StartRuntimeRequest {
+  string runtime_id = 1;
+}
+
+message StopRuntimeRequest {
+  string runtime_id = 1;
+  bool force = 2;
+}
+
+message PauseRuntimeRequest {
+  string runtime_id = 1;
+}
+
+message ResumeRuntimeRequest {
+  string runtime_id = 1;
+}
+
+message DeleteRuntimeRequest {
+  string runtime_id = 1;
+}
+
+message GetRuntimeRequest {
+  string runtime_id = 1;
+}
+
+message ListRuntimesRequest {
+  optional RuntimeType filter_type = 1;
+  optional RuntimeState filter_state = 2;
+}
+
+message ListRuntimesResponse {
+  repeated ExecutionRuntimeSpec runtimes = 1;
+}
+
+message CreateSnapshotRequest {
+  string runtime_id = 1;
+  string snapshot_name = 2;
+  string description = 3;
+}
+
+message RestoreSnapshotRequest {
+  string runtime_id = 1;
+  string snapshot_id = 2;
+}
+
+message GetMetricsRequest {
+  string runtime_id = 1;
+}
+
+message NetworkPolicyCheckRequest {
+  string source_runtime_id = 1;
+  string target_runtime_id = 2;
+  uint32 port = 3;
+  string protocol = 4; // "tcp", "udp"
+}
+
+message NetworkPolicyCheckResponse {
+  bool allowed = 1;
+  string reason = 2;
+}
+
+// ============================================================
+//  SERVICE DEFINITIONS
+// ============================================================
+
+service RuntimeManagerService {
+  rpc CreateRuntime(CreateRuntimeRequest) returns (CreateRuntimeResponse);
+  rpc StartRuntime(StartRuntimeRequest) returns (ExecutionRuntimeSpec);
+  rpc StopRuntime(StopRuntimeRequest) returns (ExecutionRuntimeSpec);
+  rpc PauseRuntime(PauseRuntimeRequest) returns (ExecutionRuntimeSpec);
+  rpc ResumeRuntime(ResumeRuntimeRequest) returns (ExecutionRuntimeSpec);
+  rpc DeleteRuntime(DeleteRuntimeRequest) returns (google.protobuf.Empty);
+  rpc GetRuntime(GetRuntimeRequest) returns (ExecutionRuntimeSpec);
+  rpc ListRuntimes(ListRuntimesRequest) returns (ListRuntimesResponse);
+  rpc CreateSnapshot(CreateSnapshotRequest) returns (VmSnapshot);
+  rpc RestoreSnapshot(RestoreSnapshotRequest) returns (google.protobuf.Empty);
+  rpc GetMetrics(GetMetricsRequest) returns (ResourceUsageMetrics);
+  rpc CheckNetworkPolicy(NetworkPolicyCheckRequest) returns (NetworkPolicyCheckResponse);
+}

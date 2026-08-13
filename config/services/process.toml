@@ -1,0 +1,13 @@
+name = "cognyx-service-process"
+description = "CognyxOS Process Manager Service"
+binary_path = "./target/debug/cognyx-service-process"
+args = []
+env = [["RUST_LOG", "info"]]
+dependencies = ["cognyx-bus", "cognyx-service-logging"]
+priority = 1
+restart_policy = "Always"
+
+[health_check]
+interval_secs = 5
+timeout_secs = 2
+max_retries = 3

@@ -1,0 +1,420 @@
+syntax = "proto3";
+
+package cognyx.services.ai.v1;
+
+import "cognyx/common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";
+
+option go_package = "cognyxos/api/gen/go/services/ai/v1;aiv1";
+
+// ============================================================
+//  SERVICE: LLM Engine
+// ============================================================
+
+enum ModelBackend {
+  MODEL_BACKEND_UNSPECIFIED = 0;
+  LOCAL_VLLM = 1;
+  LOCAL_OLLAMA = 2;
+  LOCAL_ONNX = 3;
+  REMOTE_OPENAI = 10;
+  REMOTE_ANTHROPIC = 11;
+  REMOTE_GEMINI = 12;
+  REMOTE_CUSTOM = 20;
+}
+
+enum ModelCapability {
+  MODEL_CAPABILITY_UNSPECIFIED = 0;
+  REASONING = 1;
+  CODE_GENERATION = 2;
+  CREATIVE_WRITING = 3;
+  SUMMARIZATION = 4;
+  FUNCTION_CALLING = 5;
+  VISION = 6;
+  AUDIO = 7;
+  MULTIMODAL = 8;
+}
+
+message ModelInfo {
+  string model_id = 1;
+  string display_name = 2;
+  ModelBackend backend = 3;
+  uint64 context_window_tokens = 4;
+  repeated ModelCapability capabilities = 5;
+  string quantization = 6;     // e.g. "Q4_K_M", "FP16"
+  uint64 parameter_count_billions = 7;
+  bool local_inference = 8;
+  string license = 9;
+  google.protobuf.Duration avg_latency_p95_per_1k_tokens = 10;
+}
+
+message ChatMessage {
+  enum Role {
+    ROLE_UNSPECIFIED = 0;
+    SYSTEM = 1;
+    USER = 2;
+    ASSISTANT = 3;
+    TOOL = 4;
+  }
+  Role role = 1;
+  string content_text = 2;
+  repeated ContentPart content_multimodal = 3;
+  optional string name = 4;
+  repeated ToolCall tool_calls = 5;
+  optional string tool_call_id = 6;
+}
+
+message ContentPart {
+  oneof part {
+    string text = 1;
+    bytes image_bytes = 2;
+    string image_url = 3;
+    bytes audio_bytes = 4;
+  }
+}
+
+message ToolCall {
+  cognyx.common.v1.Uuid call_id = 1;
+  string function_name = 2;
+  google.protobuf.Struct arguments = 3;
+}
+
+message SamplingParams {
+  optional float temperature = 1;       // 0 = deterministic, 1 = creative
+  optional float top_p = 2;             // nucleus sampling
+  optional uint32 top_k = 3;
+  optional float repetition_penalty = 4;
+  optional uint32 max_tokens = 5;
+  repeated string stop_sequences = 6;
+  optional uint64 random_seed = 7;
+}
+
+message GenerateRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  string model_id = 3;
+  repeated ChatMessage messages = 4;
+  optional SamplingParams sampling = 5;
+  repeated ToolDefinition available_tools = 6;
+  optional ToolChoice tool_choice = 7;
+  optional cognyx.common.v1.Uuid workspace_id = 8;
+  bool allow_remote_inference = 9;  // If false, fail-back to local-only
+}
+
+message ToolDefinition {
+  string name = 1;
+  string description = 2;
+  google.protobuf.Struct parameters_json_schema = 3;
+}
+
+message ToolChoice {
+  enum Mode { AUTO = 0; NONE = 1; REQUIRED = 2; SPECIFIC = 3; }
+  Mode mode = 1;
+  optional string specific_tool_name = 2;
+}
+
+message GenerateResponse {
+  cognyx.common.v1.Uuid response_id = 1;
+  string content_text = 2;
+  repeated ToolCall tool_calls = 3;
+  TokenUsage usage = 4;
+  string model_used = 5;
+  google.protobuf.Duration latency = 6;
+  string finish_reason = 7;    // stop, length, tool_calls, error
+}
+
+message TokenUsage {
+  uint64 prompt_tokens = 1;
+  uint64 completion_tokens = 2;
+  uint64 total_tokens = 3;
+  optional uint64 cache_hit_tokens = 4;
+}
+
+message EmbeddingRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  string model_id = 3;
+  repeated string texts = 4;
+}
+
+message EmbeddingResponse {
+  repeated EmbeddingVector embeddings = 1;
+  uint32 dimension = 2;
+  string model_used = 3;
+  TokenUsage usage = 4;
+}
+message EmbeddingVector { repeated float values = 1 [packed = true]; }
+
+service LLMService {
+  rpc Generate(GenerateRequest) returns (GenerateResponse);
+  rpc GenerateStream(GenerateRequest) returns (stream ChatDelta);
+  rpc BatchGenerate(BatchGenerateRequest) returns (BatchGenerateResponse);
+  rpc Embed(EmbeddingRequest) returns (EmbeddingResponse);
+  rpc EmbedBatch(EmbeddingRequest) returns (EmbeddingResponse);
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+  rpc GetModelInfo(GetModelInfoRequest) returns (ModelInfo);
+  rpc LoadModel(LoadModelRequest) returns (LoadModelResult);
+  rpc UnloadModel(UnloadModelRequest) returns (google.protobuf.Empty);
+}
+
+message ChatDelta {
+  cognyx.common.v1.Uuid response_id = 1;
+  string delta_text = 2;
+  optional ToolCall partial_tool_call = 3;
+  optional TokenUsage usage_so_far = 4;
+  bool final_chunk = 5;
+}
+
+message BatchGenerateRequest { repeated GenerateRequest requests = 1; }
+message BatchGenerateResponse { repeated GenerateResponse responses = 1; }
+
+message ListModelsRequest {
+  cognyx.common.v1.CapabilityToken cap = 1;
+  optional ModelCapability capability_filter = 2;
+  optional bool local_only = 3;
+}
+message ListModelsResponse { repeated ModelInfo models = 1; }
+
+message GetModelInfoRequest {
+  cognyx.common.v1.CapabilityToken cap = 1;
+  string model_id = 2;
+}
+
+message LoadModelRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  string model_id = 3;
+  optional string quantization_override = 4;
+}
+message LoadModelResult {
+  bool loaded = 1;
+  google.protobuf.Duration load_duration = 2;
+  uint64 memory_used_bytes = 3;
+}
+
+message UnloadModelRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  string model_id = 3;
+}
+
+// ============================================================
+//  SERVICE: Planning Engine
+// ============================================================
+
+enum TaskNodeType {
+  TASK_NODE_TYPE_UNSPECIFIED = 0;
+  GOAL = 1;
+  COMPOUND = 2;
+  PRIMITIVE = 3;
+  VERIFICATION = 4;
+}
+
+message Plan {
+  cognyx.common.v1.Uuid plan_id = 1;
+  string goal_statement = 2;
+  optional cognyx.common.v1.Uuid workspace_id = 3;
+  cognyx.common.v1.IdentityId owner = 4;
+  repeated TaskNode root_tasks = 5;
+  PlanStatus status = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  uint32 total_steps = 9;
+  uint32 completed_steps = 10;
+  repeated PlanConstraint constraints = 11;
+  repeated cognyx.common.v1.Uuid requires_hitl = 12;  // Which step IDs need user confirm
+}
+
+enum PlanStatus {
+  PLAN_STATUS_UNSPECIFIED = 0;
+  DRAFT = 1;
+  APPROVED = 2;
+  EXECUTING = 3;
+  PAUSED = 4;
+  COMPLETED = 5;
+  FAILED = 6;
+  CANCELLED = 7;
+  WAITING_USER = 8;
+  REPLANNING = 9;
+}
+
+message TaskNode {
+  cognyx.common.v1.Uuid node_id = 1;
+  TaskNodeType type = 2;
+  string description = 3;
+  repeated Proposition preconditions = 4;
+  repeated TaskNode subtasks = 5;
+  optional PrimitiveAction action = 6;
+  optional VerificationQuery verification = 7;
+  repeated cognyx.common.v1.Uuid dependencies = 8;
+  optional float confidence = 9;
+  optional bool requires_user_confirmation = 10;
+  optional StepExecutionStatus status = 11;
+}
+
+enum StepExecutionStatus {
+  STEP_STATUS_UNSPECIFIED = 0;
+  STEP_STATUS_PENDING = 1;
+  STEP_STATUS_RUNNING = 2;
+  STEP_STATUS_SUCCEEDED = 3;
+  STEP_STATUS_FAILED = 4;
+  STEP_STATUS_VERIFIED = 5;
+  STEP_STATUS_VERIFICATION_FAILED = 6;
+  STEP_STATUS_USER_DENIED = 7;
+}
+
+
+message Proposition {
+  string predicate = 1;
+  repeated string arguments = 2;
+}
+
+message PrimitiveAction {
+  string capability_operation = 1;
+  string target_service = 2;
+  google.protobuf.Struct parameters = 3;
+}
+
+message VerificationQuery {
+  string description = 1;
+  string llm_prompt_verification = 2;
+  repeated string expected_assertions = 3;
+}
+
+message StringList {
+  repeated string values = 1;
+}
+
+message PlanConstraint {
+  oneof constraint {
+    google.protobuf.Timestamp deadline = 1;
+    uint64 max_token_budget = 2;
+    uint64 max_tool_calls = 3;
+    StringList allowed_capabilities = 4;
+    StringList forbidden_paths = 5;
+  }
+}
+
+
+service PlanningService {
+  rpc CreatePlan(CreatePlanRequest) returns (Plan);
+  rpc ExecutePlan(ExecutePlanRequest) returns (PlanExecutionHandle);
+  rpc CancelPlan(CancelPlanRequest) returns (google.protobuf.Empty);
+  rpc PausePlan(PausePlanRequest) returns (google.protobuf.Empty);
+  rpc ResumePlan(ResumePlanRequest) returns (google.protobuf.Empty);
+  rpc GetPlanStatus(GetPlanStatusRequest) returns (Plan);
+  rpc GetPlanExecutionHistory(HistoryRequest) returns (PlanExecutionHistory);
+  rpc VerifyStep(VerifyStepRequest) returns (StepVerification);
+  rpc ConfirmStepHitl(HitlConfirmRequest) returns (google.protobuf.Empty);
+  rpc WatchPlanEvents(WatchPlanEventsRequest) returns (stream PlanEvent);
+}
+
+message CreatePlanRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  string goal = 3;
+  optional cognyx.common.v1.Uuid workspace_id = 4;
+  repeated PlanConstraint constraints = 5;
+  bool auto_verify_steps = 6;
+}
+
+message ExecutePlanRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid plan_id = 3;
+  optional cognyx.common.v1.Uuid step_filter_start_from = 4;
+}
+
+message PlanExecutionHandle {
+  cognyx.common.v1.Uuid plan_id = 1;
+  google.protobuf.Timestamp started_at = 2;
+}
+
+message CancelPlanRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid plan_id = 3;
+  optional string reason = 4;
+}
+
+message PausePlanRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid plan_id = 3;
+}
+message ResumePlanRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid plan_id = 3;
+}
+
+message GetPlanStatusRequest {
+  cognyx.common.v1.CapabilityToken cap = 1;
+  cognyx.common.v1.Uuid plan_id = 2;
+}
+
+message HistoryRequest {
+  cognyx.common.v1.CapabilityToken cap = 1;
+  cognyx.common.v1.Uuid plan_id = 2;
+}
+message PlanExecutionHistory {
+  repeated StepExecutionRecord records = 1;
+}
+message StepExecutionRecord {
+  cognyx.common.v1.Uuid step_id = 1;
+  StepExecutionStatus status = 2;
+  google.protobuf.Timestamp started_at = 3;
+  google.protobuf.Timestamp completed_at = 4;
+  optional cognyx.common.v1.Error error = 5;
+  google.protobuf.Struct result = 6;
+}
+
+message VerifyStepRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid plan_id = 3;
+  cognyx.common.v1.Uuid step_id = 4;
+}
+message StepVerification {
+  bool verified = 1;
+  float confidence = 2;
+  string reasoning = 3;
+  repeated string failed_assertions = 4;
+}
+
+message HitlConfirmRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid plan_id = 3;
+  cognyx.common.v1.Uuid step_id = 4;
+  bool approve = 5;
+  optional string alternative_instruction = 6;
+}
+
+message WatchPlanEventsRequest {
+  cognyx.common.v1.CapabilityToken cap = 1;
+  optional cognyx.common.v1.Uuid plan_id = 2;
+}
+
+message PlanEvent {
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    PLAN_CREATED = 1;
+    PLAN_STARTED = 2;
+    STEP_STARTED = 3;
+    STEP_COMPLETED = 4;
+    STEP_FAILED = 5;
+    HITL_REQUIRED = 6;
+    HITL_RESOLVED = 7;
+    PLAN_COMPLETED = 8;
+    PLAN_FAILED = 9;
+    REPLAN_STARTED = 10;
+  }
+  Type type = 1;
+  cognyx.common.v1.Uuid plan_id = 2;
+  optional cognyx.common.v1.Uuid step_id = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  google.protobuf.Struct details = 5;
+}

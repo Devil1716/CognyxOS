@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package cognyx.common.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "cognyxos/api/gen/go/common/v1;commonv1";
+option java_multiple_files = true;
+option java_outer_classname = "CommonProto";
+option java_package = "com.cognyxos.common.v1";
+option objc_class_prefix = "COGCOMMON";
+
+// Canonical UUID (v7 preferred for time-ordered IDs)
+message Uuid {
+  // RFC 4122 string representation: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  string value = 1;
+}
+
+// Identity identifier: user, service, device, agent, workspace
+message IdentityId {
+  string value = 1;
+}
+
+// Capability token - opaque to most modules (validated by bus + permission svc)
+message CapabilityToken {
+  // Opaque serialized token bytes (CBOR encoded, signed)
+  bytes token_bytes = 1;
+  // Optional token_id for logging/auditing (signed part of the token)
+  Uuid token_id = 2;
+}
+
+// Pagination request: cursor-based, never offset/limit
+message PaginationRequest {
+  // Results per page. Default 50. Max 1000.
+  int32 page_size = 1;
+  // Opaque cursor from previous response's next_page_token
+  string page_token = 2;
+}
+
+message PaginationResponse {
+  // Empty string = no more results
+  string next_page_token = 1;
+  // Approximate total count. Implementations may omit for perf.
+  int64 total_estimated = 2;
+}
+
+// Metadata that MUST accompany every request
+message RequestMetadata {
+  // Client-generated unique request ID. Used for idempotency/dedup.
+  Uuid request_id = 1;
+  // Absolute deadline. Server will abort with DEADLINE_EXCEEDED past this.
+  google.protobuf.Timestamp deadline = 2;
+  // Impersonate (sudo). Requires delegation capability.
+  IdentityId as_identity = 3;
+  // Correlation ID (user-facing action trace). Propagated across hops.
+  Uuid correlation_id = 4;
+  // Causation ID: the message that DIRECTLY caused this one.
+  Uuid causation_id = 5;
+  // Workspace scope (if operation targets a specific workspace)
+  Uuid workspace_id = 6;
+}
+
+// Priority for messages and tasks (0 = highest)
+enum Priority {
+  PRIORITY_UNSPECIFIED = 0;
+  PRIORITY_LOW = 1;       //  Background: indexing, analytics (lowest)
+  PRIORITY_NORMAL = 2;    //  Default: app operations, search
+  PRIORITY_HIGH = 3;      //  User-visible: UI updates, notifications
+  PRIORITY_CRITICAL = 4;  //  Must-not-delay: security events, crash, boot
+}
+
+// Standard error model (returned in gRPC status details / REST problem+json)
+message Error {
+  enum ErrorCode {
+    ERROR_CODE_UNSPECIFIED = 0;
+    INVALID_ARGUMENT = 1;
+    UNAUTHENTICATED = 2;
+    PERMISSION_DENIED = 3;
+    CAPABILITY_EXPIRED = 4;
+    CAPABILITY_REVOKED = 5;
+    NOT_FOUND = 6;
+    ALREADY_EXISTS = 7;
+    RESOURCE_EXHAUSTED = 8;
+    RATE_LIMITED = 9;
+    HITL_REQUIRED = 10;
+    AUTH_ESCALATION_REQUIRED = 11;
+    FAILED_PRECONDITION = 12;
+    CONFLICT = 13;
+    INTERNAL = 14;
+    UNIMPLEMENTED = 15;
+    SHUTTING_DOWN = 16;
+    WORKSPACE_INACTIVE = 17;
+    DEADLINE_EXCEEDED = 18;
+    CANCELLED = 19;
+  }
+  ErrorCode code = 1;
+  // Developer-facing English message
+  string message = 2;
+  // Optional i18n user-facing message key (rendered by UI)
+  string user_message_localized = 3;
+  // Optional user-facing action suggestion
+  string suggested_user_action = 4;
+  // True if client may retry with same request_id
+  bool retryable = 5;
+  // If retryable, client suggested backoff
+  google.protobuf.Duration retry_after = 6;
+  // Domain of error: "filesystem", "permission", "network", etc.
+  string domain = 7;
+  // Structured detail payload (per code)
+  google.protobuf.Struct details = 8;
+}

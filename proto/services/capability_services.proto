@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package cognyx.services.capability.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/duration.proto";
+
+option go_package = "cognyxos/api/gen/go/services/capability/v1;capabilityv1";
+
+enum CapabilityRuntime { CAPABILITY_RUNTIME_UNSPECIFIED = 0; LINUX = 1; WINDOWS = 2; MACOS = 3; CONTAINER = 4; REMOTE = 5; }
+enum CapabilityStatus { CAPABILITY_STATUS_UNSPECIFIED = 0; COMPLETED = 1; FAILED = 2; DENIED = 3; TIMEOUT = 4; UNAVAILABLE = 5; }
+enum CapabilityPermission { CAPABILITY_PERMISSION_UNSPECIFIED = 0; ALLOW = 1; DENY = 2; USER_APPROVAL_REQUIRED = 3; }
+enum Idempotency { IDEMPOTENCY_UNSPECIFIED = 0; READ_ONLY = 1; IDEMPOTENT = 2; NON_IDEMPOTENT = 3; DESTRUCTIVE = 4; }
+
+message CapabilityVersion { uint32 major = 1; uint32 minor = 2; }
+message CapabilityMetadata { repeated string required_permissions = 1; repeated string required_resources = 2; repeated CapabilityRuntime supported_runtimes = 3; string security_level = 4; string risk_level = 5; Idempotency idempotency = 6; google.protobuf.Duration timeout = 7; string audit_policy = 8; }
+message CapabilityDefinition { string capability_id = 1; string name = 2; CapabilityVersion version = 3; string description = 4; google.protobuf.Struct input_schema = 5; google.protobuf.Struct output_schema = 6; CapabilityMetadata metadata = 7; bool deprecated = 8; }
+message CapabilityProvider { string provider_id = 1; string runtime_id = 2; repeated string capability_ids = 3; uint32 priority = 4; }
+message CapabilityHealth { string provider_id = 1; string availability = 2; uint64 latency_ms = 3; double failure_rate = 4; uint64 last_success_ms = 5; uint64 last_failure_ms = 6; }
+message CapabilityRequest { string request_id = 1; string task_id = 2; string agent_id = 3; string capability_id = 4; CapabilityVersion requested_version = 5; string runtime_hint = 6; google.protobuf.Struct input = 7; google.protobuf.Duration timeout = 8; string trace_id = 9; string span_id = 10; }
+message CapabilityResult { string request_id = 1; string capability_id = 2; string runtime_id = 3; CapabilityStatus status = 4; google.protobuf.Struct output = 5; string error_code = 6; string error_message = 7; google.protobuf.Struct metadata = 8; uint64 execution_time_ms = 9; repeated string artifacts = 10; repeated string side_effects = 11; string provider_id = 12; }
+message ListCapabilitiesRequest { string query = 1; }
+message ListCapabilitiesResponse { repeated CapabilityDefinition capabilities = 1; }
+message LookupCapabilityRequest { string capability_id = 1; CapabilityVersion requested_version = 2; }
+message ProviderListRequest { string capability_id = 1; }
+message ProviderListResponse { repeated CapabilityProvider providers = 1; }
+message RuntimeDiscoveryRequest { string runtime_id = 1; }
+message RuntimeDiscoveryResponse { repeated CapabilityDefinition capabilities = 1; }
+message HealthRequest {}
+message HealthResponse { repeated CapabilityHealth providers = 1; }
+
+service CapabilityRegistryService { rpc List(ListCapabilitiesRequest) returns (ListCapabilitiesResponse); rpc Lookup(LookupCapabilityRequest) returns (CapabilityDefinition); rpc Providers(ProviderListRequest) returns (ProviderListResponse); }
+service CapabilityExecutionService { rpc Execute(CapabilityRequest) returns (CapabilityResult); }
+service CapabilityDiscoveryService { rpc Discover(RuntimeDiscoveryRequest) returns (RuntimeDiscoveryResponse); }
+service CapabilityHealthService { rpc GetHealth(HealthRequest) returns (HealthResponse); }

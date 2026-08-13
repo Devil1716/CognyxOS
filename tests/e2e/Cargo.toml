@@ -1,0 +1,24 @@
+[package]
+name = "cognyx-e2e"
+version.workspace = true
+edition.workspace = true
+
+[dev-dependencies]
+cognyx-capability = { path = "../../runtime/capability" }
+cognyx-gateway = { path = "../../runtime/agent/gateway" }
+cognyx-agent-core = { path = "../../runtime/agent/core" }
+cognyx-agent-runtime = { path = "../../runtime/agent/runtime" }
+cognyx-intent = { path = "../../runtime/agent/intent" }
+cognyx-resources = { path = "../../runtime/resources" }
+cognyx-execution = { path = "../../runtime/execution" }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+
+[[test]]
+name = "e2e_phase5"
+path = "tests/e2e_phase5.rs"
+
+[[test]]
+name = "e2e_phase6"
+path = "tests/e2e_phase6.rs"

@@ -1,0 +1,37 @@
+[package]
+name = "cognyx-agent-kernel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+dashmap = { workspace = true }
+cognyx-proto = { workspace = true }
+cognyx-execution = { path = "../../execution" }
+cognyx-windows = { path = "../../windows" }
+cognyx-resources = { path = "../../resources" }
+
+cognyx-agent-core = { path = "../core" }
+cognyx-intent = { path = "../intent" }
+cognyx-task-manager = { path = "../task_manager" }
+cognyx-planner = { path = "../planner" }
+cognyx-agent-scheduler = { path = "../scheduler" }
+cognyx-gateway = { path = "../gateway" }
+cognyx-agent-memory = { path = "../memory" }
+cognyx-agent-runtime = { path = "../runtime" }
+
+[[bin]]
+name = "cognyx-agent-kernel"
+path = "src/main.rs"

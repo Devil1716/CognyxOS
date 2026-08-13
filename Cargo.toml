@@ -1,0 +1,102 @@
+[workspace]
+resolver = "2"
+members = [
+    "proto/gen/rust",
+    "sdk/rust",
+    "services/bus",
+    "services/process",
+    "services/logging",
+    "services/config",
+    "services/state",
+    "services/identity",
+    "services/security",
+    "services/workspace",
+    "services/filesystem",
+    "services/scheduler",
+    "services/device",
+    "services/network",
+    "services/graphics",
+    "services/notification",
+    "services/telemetry",
+    "services/update",
+    "services/indexing",
+    "services/search",
+    "system/supervisor",
+    "runtime/ai/llm_engine",
+    "runtime/ai/embedding",
+    "runtime/ai/vector_store",
+    "runtime/ai/context",
+    "runtime/virtualization",
+    "runtime/execution",
+    "runtime/capability",
+    "runtime/container",
+    "runtime/windows",
+    "runtime/macos",
+    "runtime/resources",
+    "runtime/storage",
+    "runtime/network",
+    "runtime/guest",
+    "runtime/manager",
+    "devtools/cli",
+    "runtime/agent/core",
+    "runtime/agent/intent",
+    "runtime/agent/task_manager",
+    "runtime/agent/planner",
+    "runtime/agent/scheduler",
+    "runtime/agent/gateway",
+    "runtime/agent/memory",
+    "runtime/agent/kernel",
+    "runtime/agent/runtime",
+    "tests/e2e",
+]
+
+
+
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/cognyxos/cognyxos"
+
+[workspace.dependencies]
+tokio = { version = "1.40", features = ["full", "tracing", "rt-multi-thread", "signal"] }
+tokio-stream = "0.1"
+tonic = "0.12"
+
+prost = "0.13"
+prost-types = "0.13"
+prost-build = "0.13"
+tonic-build = "0.12"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+uuid = { version = "1.10", features = ["v7", "serde"] }
+sha2 = "0.10"
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+rand = "0.8"
+bytes = "1.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+async-trait = "0.1"
+futures = "0.3"
+dashmap = "6.0"
+
+# Workspace internal crate dependencies
+cognyx-proto = { path = "proto/gen/rust" }
+cognyx-bus = { path = "services/bus" }
+cognyx-sdk = { path = "sdk/rust" }
+cognyx-agent-runtime = { path = "runtime/agent/runtime" }
+
+[profile.dev]
+opt-level = 1
+overflow-checks = true
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+panic = "abort"
+strip = true

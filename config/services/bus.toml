@@ -1,0 +1,13 @@
+name = "cognyx-bus"
+description = "CognyxOS Message Bus Daemon"
+binary_path = "./target/debug/cognyx-bus"
+args = []
+env = [["RUST_LOG", "info"]]
+dependencies = []
+priority = 0
+restart_policy = "Always"
+
+[health_check]
+interval_secs = 2
+timeout_secs = 1
+max_retries = 3

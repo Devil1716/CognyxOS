@@ -1,0 +1,172 @@
+syntax = "proto3";
+
+package cognyx.services.agent.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/empty.proto";
+
+// ============================================================
+//  MULTI-AGENT IDENTITY & STATUS
+// ============================================================
+
+enum AgentRole {
+  AGENT_ROLE_UNSPECIFIED = 0;
+  ROLE_MANAGER = 1;
+  ROLE_PLANNER = 2;
+  ROLE_RESEARCHER = 3;
+  ROLE_COMPUTER_OPERATOR = 4;
+  ROLE_FILE_OPERATOR = 5;
+  ROLE_BROWSER_OPERATOR = 6;
+  ROLE_ANALYST = 7;
+  ROLE_WRITER = 8;
+  ROLE_VALIDATOR = 9;
+  ROLE_WORKER = 10;
+  ROLE_CUSTOM = 11;
+}
+
+enum AgentStatus {
+  AGENT_STATUS_UNSPECIFIED = 0;
+  AGENT_CREATED = 1;
+  AGENT_INITIALIZING = 2;
+  AGENT_READY = 3;
+  AGENT_RUNNING = 4;
+  AGENT_WAITING = 5;
+  AGENT_PAUSED = 6;
+  AGENT_BLOCKED = 7;
+  AGENT_FAILED = 8;
+  AGENT_RECOVERING = 9;
+  AGENT_STOPPING = 10;
+  AGENT_STOPPED = 11;
+  AGENT_TERMINATED = 12;
+}
+
+message AgentResourceLimits {
+  float cpu_quota_pct = 1;
+  uint64 memory_bytes = 2;
+  uint32 max_child_agents = 3;
+  uint32 max_concurrent_tasks = 4;
+  uint32 max_retries = 5;
+  uint32 max_message_rate = 6;
+  uint32 timeout_seconds = 7;
+}
+
+message AgentIdentity {
+  string agent_id = 1;
+  string parent_agent_id = 2;
+  string root_agent_id = 3;
+  string name = 4;
+  string display_name = 5;
+  AgentRole role = 6;
+  AgentStatus status = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp started_at = 9;
+  google.protobuf.Timestamp stopped_at = 10;
+  repeated string permissions = 11;
+  repeated string capabilities = 12;
+  AgentResourceLimits resource_limits = 13;
+  google.protobuf.Struct metadata = 14;
+}
+
+message AgentTree {
+  AgentIdentity root = 1;
+  repeated AgentIdentity children = 2;
+  repeated string active_task_ids = 3;
+}
+
+// ============================================================
+//  AGENT COMMUNICATION
+// ============================================================
+
+enum AgentMessageType {
+  MSG_UNSPECIFIED = 0;
+  TASK_ASSIGNMENT = 1;
+  TASK_RESULT = 2;
+  INFORMATION_REQUEST = 3;
+  INFORMATION_RESPONSE = 4;
+  CAPABILITY_REQUEST = 5;
+  STATUS_UPDATE = 6;
+  PROGRESS_UPDATE = 7;
+  ERROR = 8;
+  APPROVAL_REQUEST = 9;
+  CANCEL = 10;
+  PAUSE = 11;
+  RESUME = 12;
+  HEARTBEAT = 13;
+}
+
+message AgentMessage {
+  string message_id = 1;
+  string sender_agent_id = 2;
+  string recipient_agent_id = 3;
+  string task_id = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  AgentMessageType message_type = 6;
+  google.protobuf.Struct payload = 7;
+  google.protobuf.Struct authorization_context = 8;
+  string trace_id = 9;
+}
+
+// ============================================================
+//  REQUEST / RESPONSE MESSAGES
+// ============================================================
+
+message CreateAgentRequest {
+  string name = 1;
+  string display_name = 2;
+  AgentRole role = 3;
+  string parent_agent_id = 4;
+  string root_agent_id = 5;
+  repeated string permissions = 6;
+  repeated string capabilities = 7;
+  AgentResourceLimits resource_limits = 8;
+}
+
+message GetAgentRequest {
+  string agent_id = 1;
+}
+
+message ListAgentsRequest {
+  string root_agent_id = 1;
+  string parent_agent_id = 2;
+}
+
+message ListAgentsResponse {
+  repeated AgentIdentity agents = 1;
+}
+
+message SendAgentMessageRequest {
+  AgentMessage message = 1;
+}
+
+message SendAgentMessageResponse {
+  bool delivered = 1;
+  string message_id = 2;
+}
+
+// ============================================================
+//  GRPC SERVICES
+// ============================================================
+
+service AgentRuntimeService {
+  rpc CreateAgent(CreateAgentRequest) returns (AgentIdentity);
+  rpc StartAgent(GetAgentRequest) returns (AgentIdentity);
+  rpc PauseAgent(GetAgentRequest) returns (AgentIdentity);
+  rpc ResumeAgent(GetAgentRequest) returns (AgentIdentity);
+  rpc StopAgent(GetAgentRequest) returns (AgentIdentity);
+  rpc TerminateAgent(GetAgentRequest) returns (AgentIdentity);
+}
+
+service AgentRegistryService {
+  rpc GetAgent(GetAgentRequest) returns (AgentIdentity);
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  rpc GetAgentTree(GetAgentRequest) returns (AgentTree);
+}
+
+service AgentCommunicationService {
+  rpc SendMessage(SendAgentMessageRequest) returns (SendAgentMessageResponse);
+}
+
+service AgentOrchestrationService {
+  rpc DispatchTask(GetAgentRequest) returns (google.protobuf.Empty);
+}

@@ -1,0 +1,13 @@
+name = "cognyx-service-logging"
+description = "CognyxOS Audit Logging Service"
+binary_path = "./target/debug/cognyx-service-logging"
+args = []
+env = [["RUST_LOG", "info"]]
+dependencies = ["cognyx-bus"]
+priority = 1
+restart_policy = "Always"
+
+[health_check]
+interval_secs = 5
+timeout_secs = 2
+max_retries = 3

@@ -1,0 +1,316 @@
+syntax = "proto3";
+
+package cognyx.services.security.v1;
+
+import "cognyx/common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";
+
+option go_package = "cognyxos/api/gen/go/services/security/v1;securityv1";
+
+// ============================================================
+//  SERVICE: Capability Token
+// ============================================================
+
+message CapabilityConstraints {
+  optional cognyx.common.v1.Uuid workspace_id = 1;
+  google.protobuf.Timestamp valid_from = 2;
+  google.protobuf.Timestamp valid_until = 3;
+  optional uint64 max_uses = 4;                 // If set, N-use token
+  uint32 max_delegation_depth = 5;              // 0 = no further delegation
+  optional uint32 rate_limit_ops_per_sec = 6;
+  repeated bytes payload_sha256_allowlist = 7;  // If set, only these payloads OK
+  bool user_confirmation_required = 8;
+  repeated string allowed_targets = 9;          // Module IDs that can receive this
+}
+
+message DelegationHop {
+  cognyx.common.v1.IdentityId delegator = 1;
+  cognyx.common.v1.IdentityId new_subject = 2;
+  CapabilityConstraints constraint_delta = 3;  // Must reduce
+  bytes delegator_signature = 4;
+}
+
+message FullCapabilityToken {
+  cognyx.common.v1.Uuid token_id = 1;
+  CapabilityType type = 2;
+  cognyx.common.v1.IdentityId issuer = 3;
+  cognyx.common.v1.IdentityId subject = 4;
+  string operation = 5;
+  string resource_pattern = 6;
+  CapabilityConstraints constraints = 7;
+  repeated DelegationHop delegation_chain = 8;
+  bytes issuer_signature = 9;
+}
+
+enum CapabilityType {
+  CAPABILITY_TYPE_UNSPECIFIED = 0;
+  OBJECT = 1;
+  ROLE_BUNDLE = 2;
+  DELEGATION = 3;
+}
+
+service CapabilityTokenService {
+  rpc MintCapability(MintCapabilityRequest) returns (cognyx.common.v1.CapabilityToken);
+  rpc DelegateCapability(DelegateRequest) returns (cognyx.common.v1.CapabilityToken);
+  rpc RevokeCapability(RevokeRequest) returns (google.protobuf.Empty);
+  rpc ValidateCapability(ValidateRequest) returns (CapabilityValidation);
+  rpc ListGrantedCapabilities(ListGrantedRequest) returns (ListGrantedResponse);
+  rpc GetTokenInfo(GetTokenInfoRequest) returns (FullCapabilityToken);
+  rpc WatchRevocationEvents(WatchRequest) returns (stream RevocationEvent);
+}
+
+message MintCapabilityRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken issuer_cap = 2;  // Authority of the issuer
+  cognyx.common.v1.IdentityId subject = 3;
+  string operation = 4;
+  string resource_pattern = 5;
+  CapabilityConstraints constraints = 6;
+}
+
+message DelegateRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken parent_token = 2;
+  cognyx.common.v1.IdentityId new_subject = 3;
+  CapabilityConstraints reduced_constraints = 4;
+}
+
+message RevokeRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken revoker_cap = 2;  // Issuer or ancestor delegation can revoke
+  cognyx.common.v1.Uuid token_id = 3;
+  optional string reason = 4;
+  bool cascade_to_delegated = 5;
+}
+
+message ValidateRequest {
+  cognyx.common.v1.CapabilityToken token = 1;
+  string expected_operation = 2;
+  string actual_resource = 3;
+  bytes actual_payload_sha256 = 4;
+  cognyx.common.v1.IdentityId actual_subject = 5;
+  cognyx.common.v1.IdentityId actual_target = 6;
+}
+
+message CapabilityValidation {
+  bool valid = 1;
+  optional cognyx.common.v1.Error failure_reason = 2;
+  optional uint64 remaining_uses = 3;
+  optional google.protobuf.Timestamp valid_until = 4;
+  repeated string actual_operations_covered = 5;
+  repeated string actual_resources_matched = 6;
+  bool hitl_required = 7;
+}
+
+message ListGrantedRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  optional cognyx.common.v1.IdentityId subject = 3;
+  optional cognyx.common.v1.Uuid workspace_id = 4;
+  optional string operation_prefix = 5;
+  cognyx.common.v1.PaginationRequest pagination = 6;
+}
+
+message ListGrantedResponse {
+  repeated FullCapabilityToken tokens = 1;
+  cognyx.common.v1.PaginationResponse pagination = 2;
+}
+
+message GetTokenInfoRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken access_cap = 2;
+  cognyx.common.v1.Uuid token_id = 3;
+}
+
+message WatchRequest { cognyx.common.v1.CapabilityToken cap = 1; }
+
+message RevocationEvent {
+  cognyx.common.v1.Uuid token_id = 1;
+  google.protobuf.Timestamp revoked_at = 2;
+  cognyx.common.v1.IdentityId revoked_by = 3;
+  string reason = 4;
+  bool cascaded = 5;
+}
+
+// ============================================================
+//  SERVICE: Audit Logger
+// ============================================================
+
+enum AuditEventType {
+  AUDIT_EVENT_TYPE_UNSPECIFIED = 0;
+  CAP_MINT = 1;
+  CAP_USE = 2;
+  CAP_REVOKE = 3;
+  AUTH_SUCCESS = 4;
+  AUTH_FAILURE = 5;
+  WORKSPACE_CREATE = 6;
+  WORKSPACE_DELETE = 7;
+  WORKSPACE_SHARE = 8;
+  SANDBOX_START = 9;
+  SANDBOX_STOP = 10;
+  PERMISSION_ESCALATION = 11;
+  POLICY_CHANGE = 12;
+  INTEGRITY_FAILURE = 13;
+  FILE_DELETE = 14;
+  NETWORK_CONNECTION = 15;
+  SYSTEM_UPDATE = 16;
+  DATA_EXPORT = 17;
+  AI_DECISION_EXECUTED = 18;
+  HITL_APPROVAL = 19;
+  HITL_DENIAL = 20;
+}
+
+message AuditEntry {
+  uint64 sequence_number = 1;          // Monotonic gap-free
+  cognyx.common.v1.Uuid entry_id = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  AuditEventType event_type = 4;
+  cognyx.common.v1.IdentityId actor = 5;
+  string action_summary = 6;
+  optional string resource = 7;
+  AuditResult result = 8;
+  optional string reason_code = 9;
+  optional cognyx.common.v1.Uuid capability_id_used = 10;
+  optional cognyx.common.v1.Uuid workspace_id = 11;
+  optional cognyx.common.v1.Uuid correlation_id = 12;
+  bytes sha256_prev_entry = 13;       // Hash chain link
+  bytes sha256_this_entry = 14;       // Hash of 1-12 fields
+  bytes signature = 15;               // Signing key rotated daily
+}
+
+enum AuditResult {
+  AUDIT_RESULT_UNSPECIFIED = 0;
+  ALLOWED = 1;
+  DENIED = 2;
+  HITL_PENDING = 3;
+  ESCALATED = 4;
+}
+
+service AuditLoggerService {
+  rpc QueryEntries(QueryEntriesRequest) returns (stream AuditEntry);
+  rpc VerifyIntegrity(VerifyIntegrityRequest) returns (IntegrityReport);
+  rpc ExportEntries(ExportRequest) returns (stream AuditEntry);
+  rpc GetRetentionPolicy(google.protobuf.Empty) returns (RetentionPolicy);
+  rpc SetRetentionPolicy(SetPolicyRequest) returns (google.protobuf.Empty);
+}
+
+message QueryEntriesRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  optional AuditEventType event_type = 3;
+  optional cognyx.common.v1.IdentityId actor = 4;
+  optional cognyx.common.v1.Uuid workspace_id = 5;
+  optional google.protobuf.Timestamp from = 6;
+  optional google.protobuf.Timestamp to = 7;
+  optional cognyx.common.v1.Uuid correlation_id = 8;
+  cognyx.common.v1.PaginationRequest pagination = 9;
+}
+
+message VerifyIntegrityRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  optional uint64 start_sequence = 3;
+  optional uint64 end_sequence = 4;
+}
+
+message IntegrityReport {
+  uint64 entries_checked = 1;
+  bool chain_valid = 2;
+  optional uint64 first_invalid_sequence = 3;
+  optional cognyx.common.v1.Error first_error = 4;
+  repeated uint64 gap_sequences = 5;
+  bytes root_hash = 6;
+}
+
+message ExportRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  optional google.protobuf.Timestamp from = 3;
+  optional google.protobuf.Timestamp to = 4;
+}
+
+message RetentionPolicy {
+  google.protobuf.Duration audit_retention = 1;
+  google.protobuf.Duration telemetry_retention = 2;
+  google.protobuf.Duration log_retention_debug = 3;
+}
+
+message SetPolicyRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  RetentionPolicy policy = 3;
+}
+
+// ============================================================
+//  SERVICE: Policy Engine
+// ============================================================
+
+enum PolicyDecision {
+  POLICY_DECISION_UNSPECIFIED = 0;
+  ALLOW = 1;
+  DENY = 2;
+  REQUIRE_HITL = 3;
+  REQUIRE_AUTH_ESCALATION = 4;
+}
+
+message PolicyEvaluationContext {
+  cognyx.common.v1.IdentityId sender = 1;
+  cognyx.common.v1.IdentityId target = 2;
+  string operation = 3;
+  bytes payload_digest = 4;
+  optional cognyx.common.v1.Uuid workspace_id = 5;
+  google.protobuf.Timestamp local_time = 6;
+  map<string, string> actor_attributes = 7;
+}
+
+message PolicyEvaluationResult {
+  PolicyDecision decision = 1;
+  repeated string matched_rules = 2;
+  optional string reason = 3;
+  optional cognyx.common.v1.Error.ErrorCode escalation_level = 4;
+}
+
+service PolicyEngineService {
+  rpc Evaluate(EvaluateRequest) returns (PolicyEvaluationResult);
+  rpc LoadPolicyBundle(LoadPolicyRequest) returns (google.protobuf.Empty);
+  rpc ListActivePolicies(ListPoliciesRequest) returns (ListPoliciesResponse);
+  rpc SimulatePolicy(SimulateRequest) returns (PolicyEvaluationResult);
+}
+
+message EvaluateRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  PolicyEvaluationContext ctx = 2;
+  cognyx.common.v1.CapabilityToken token_presented = 3;
+}
+
+message LoadPolicyRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken admin_cap = 2;
+  string bundle_id = 3;        // Policy bundle identifier
+  bytes rego_bundle_tar_gz = 4;
+  bytes signature = 5;
+}
+
+message ListPoliciesRequest {
+  cognyx.common.v1.CapabilityToken cap = 1;
+  cognyx.common.v1.PaginationRequest pagination = 2;
+}
+message ListPoliciesResponse {
+  repeated PolicyInfo policies = 1;
+  cognyx.common.v1.PaginationResponse pagination = 2;
+}
+message PolicyInfo {
+  string name = 1;
+  string description = 2;
+  google.protobuf.Timestamp loaded_at = 3;
+  repeated string modules = 4;
+}
+
+message SimulateRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  PolicyEvaluationContext hypothetical_ctx = 3;
+}

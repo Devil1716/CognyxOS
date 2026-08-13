@@ -1,0 +1,391 @@
+syntax = "proto3";
+
+package cognyx.services.core.v1;
+
+import "cognyx/common/v1/common.proto";
+import "cognyx/bus/v1/bus.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "cognyxos/api/gen/go/services/core/v1;corev1";
+
+// ============================================================
+//  SERVICE: Workspace Manager
+// ============================================================
+
+enum WorkspaceState {
+  WORKSPACE_STATE_UNSPECIFIED = 0;
+  INACTIVE = 1;
+  ACTIVATING = 2;
+  ACTIVE = 3;
+  HIBERNATING = 4;
+  HIBERNATED = 5;
+  ARCHIVING = 6;
+  ARCHIVED = 7;
+  DELETING = 8;
+  ERROR = 9;
+}
+
+enum WorkspaceRole {
+  WORKSPACE_ROLE_UNSPECIFIED = 0;
+  OWNER = 1;
+  ADMIN = 2;
+  CONTRIBUTOR = 3;
+  VIEWER = 4;
+}
+
+message WorkspaceMember {
+  cognyx.common.v1.IdentityId identity = 1;
+  WorkspaceRole role = 2;
+  google.protobuf.Timestamp added_at = 3;
+  optional cognyx.common.v1.IdentityId added_by = 4;
+}
+
+message ResourceQuota {
+  optional uint64 memory_limit_bytes = 1;
+  optional float cpu_cores_max = 2;
+  optional uint64 disk_limit_bytes = 3;
+  optional uint64 network_out_bps = 4;
+  optional uint32 max_processes = 5;
+  optional uint64 gpu_memory_bytes = 6;
+}
+
+message Workspace {
+  cognyx.common.v1.Uuid id = 1;
+  string name = 2;
+  string description = 3;
+  cognyx.common.v1.IdentityId owner = 4;
+  repeated WorkspaceMember members = 5;
+  ResourceQuota resource_quota = 6;
+  google.protobuf.Timestamp created_at = 7;
+  WorkspaceState state = 8;
+  repeated string installed_capability_ids = 9;
+  repeated string tags = 10;
+  map<string, string> metadata = 11;
+  google.protobuf.Timestamp last_active_at = 12;
+  uint64 disk_usage_bytes = 13;
+}
+
+service WorkspaceService {
+  rpc CreateWorkspace(CreateWorkspaceRequest) returns (Workspace);
+  rpc ActivateWorkspace(ActivateWorkspaceRequest) returns (ActivateWorkspaceResponse);
+  rpc HibernateWorkspace(HibernateWorkspaceRequest) returns (HibernateWorkspaceResponse);
+  rpc DeleteWorkspace(DeleteWorkspaceRequest) returns (google.protobuf.Empty);
+  rpc CloneWorkspace(CloneWorkspaceRequest) returns (Workspace);
+  rpc GetWorkspace(GetWorkspaceRequest) returns (Workspace);
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  rpc UpdateWorkspace(UpdateWorkspaceRequest) returns (Workspace);
+  rpc SetMemberRole(SetMemberRoleRequest) returns (google.protobuf.Empty);
+  rpc RemoveMember(RemoveMemberRequest) returns (google.protobuf.Empty);
+  rpc WatchWorkspaceEvents(WatchWorkspaceEventsRequest) returns (stream WorkspaceEvent);
+  rpc ArchiveWorkspace(ArchiveWorkspaceRequest) returns (google.protobuf.Empty);
+  rpc UnarchiveWorkspace(UnarchiveWorkspaceRequest) returns (Workspace);
+}
+
+message CreateWorkspaceRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  string name = 3;
+  string description = 4;
+  optional ResourceQuota resource_quota = 5;
+  optional cognyx.common.v1.Uuid template_workspace_id = 6;
+  repeated string tags = 7;
+  map<string, string> metadata = 8;
+}
+
+message ActivateWorkspaceRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid workspace_id = 3;
+  bool force = 4;
+}
+message ActivateWorkspaceResponse {
+  Workspace workspace = 1;
+  google.protobuf.Duration activation_duration = 2;
+  repeated cognyx.common.v1.Error warnings = 3;
+}
+
+message HibernateWorkspaceRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid workspace_id = 3;
+}
+message HibernateWorkspaceResponse {
+  uint64 snapshot_size_bytes = 1;
+  google.protobuf.Duration hibernation_duration = 2;
+}
+
+message DeleteWorkspaceRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid workspace_id = 3;
+  bool purge_immediately = 4;
+}
+
+message CloneWorkspaceRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid source_workspace_id = 3;
+  string new_name = 4;
+  bool clone_state = 5;
+  bool clone_memory = 6;
+}
+
+message GetWorkspaceRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid workspace_id = 3;
+}
+
+message ListWorkspacesRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.PaginationRequest pagination = 3;
+  optional WorkspaceState filter_state = 4;
+  optional string tag_filter = 5;
+  optional string search_query = 6;
+  optional WorkspaceRole my_role = 7;
+}
+
+message ListWorkspacesResponse {
+  repeated Workspace workspaces = 1;
+  cognyx.common.v1.PaginationResponse pagination = 2;
+}
+
+message UpdateWorkspaceRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid workspace_id = 3;
+  optional string new_name = 4;
+  optional string new_description = 5;
+  optional ResourceQuota new_quota = 6;
+  repeated string add_tags = 7;
+  repeated string remove_tags = 8;
+  map<string, string> update_metadata = 9;
+}
+
+message SetMemberRoleRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid workspace_id = 3;
+  cognyx.common.v1.IdentityId member = 4;
+  WorkspaceRole role = 5;
+}
+
+message RemoveMemberRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid workspace_id = 3;
+  cognyx.common.v1.IdentityId member = 4;
+}
+
+message WatchWorkspaceEventsRequest {
+  cognyx.common.v1.CapabilityToken cap = 1;
+  optional cognyx.common.v1.Uuid workspace_id = 2;
+  repeated WorkspaceEvent.Type filter_types = 3;
+}
+
+message WorkspaceEvent {
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    CREATED = 1;
+    ACTIVATED = 2;
+    HIBERNATED = 3;
+    UPDATED = 4;
+    DELETED = 5;
+    MEMBER_ADDED = 6;
+    MEMBER_REMOVED = 7;
+    ROLE_CHANGED = 8;
+    ARCHIVED = 9;
+    UNARCHIVED = 10;
+    QUOTA_EXCEEDED = 11;
+  }
+  Type event_type = 1;
+  cognyx.common.v1.Uuid workspace_id = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  cognyx.common.v1.IdentityId actor = 4;
+  optional Workspace snapshot = 5;
+}
+
+message ArchiveWorkspaceRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid workspace_id = 3;
+}
+
+message UnarchiveWorkspaceRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.Uuid workspace_id = 3;
+}
+
+// ============================================================
+//  SERVICE: Process Manager
+// ============================================================
+
+enum ProcessStatus {
+  PROCESS_STATUS_UNSPECIFIED = 0;
+  RUNNING = 1;
+  SLEEPING = 2;
+  STOPPED = 3;
+  ZOMBIE = 4;
+  DEAD = 5;
+  PAGING = 6;
+}
+
+message ResourceLimits {
+  optional uint64 memory_soft_limit_bytes = 1;
+  optional uint64 memory_hard_limit_bytes = 2;
+  optional uint32 max_cpu_percent = 3;
+  optional uint64 max_read_bps = 4;
+  optional uint64 max_write_bps = 5;
+  optional uint32 max_open_files = 6;
+  optional uint32 max_processes = 7;
+}
+
+message ProcessRecord {
+  uint32 pid = 1;
+  uint32 parent_pid = 2;
+  optional cognyx.common.v1.Uuid workspace_id = 3;
+  cognyx.common.v1.IdentityId owner = 4;
+  string binary_path = 5;
+  bytes binary_sha256 = 6;
+  repeated string argv = 7;
+  repeated string env_keys = 8;
+  google.protobuf.Timestamp created_at = 9;
+  ResourceLimits resource_limits = 10;
+  string cgroup_path = 11;
+  ProcessStatus status = 12;
+  optional int32 exit_code = 13;
+  uint64 memory_usage_rss_bytes = 14;
+  uint64 cpu_usage_ns_total = 15;
+  uint32 thread_count = 16;
+  repeated uint32 open_fds_count = 17;
+}
+
+enum SupervisorPolicy {
+  SUPERVISOR_POLICY_UNSPECIFIED = 0;
+  NO_RESTART = 1;
+  RESTART_ON_FAILURE = 2;
+  RESTART_ALWAYS = 3;
+  RESTART_ON_FAILURE_UP_TO = 4;
+}
+
+message SpawnRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  string binary_path = 3;
+  repeated string argv = 4;
+  map<string, string> env = 5;
+  optional cognyx.common.v1.Uuid workspace_id = 6;
+  optional ResourceLimits limits = 7;
+  SupervisorPolicy supervisor = 8;
+  optional uint32 restart_max_attempts = 9;
+  repeated string seccomp_allow_syscalls = 10;
+  repeated string allowed_filesystem_paths = 11;
+  optional string working_directory = 12;
+  bool capture_stdout_stderr = 13;
+}
+
+message SpawnResponse {
+  uint32 pid = 1;
+  cognyx.common.v1.Uuid process_handle_id = 2;
+}
+
+service ProcessManagerService {
+  rpc SpawnProcess(SpawnRequest) returns (SpawnResponse);
+  rpc TerminateProcess(TerminateProcessRequest) returns (google.protobuf.Empty);
+  rpc SendSignal(SendSignalRequest) returns (google.protobuf.Empty);
+  rpc GetProcessInfo(GetProcessInfoRequest) returns (ProcessRecord);
+  rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
+  rpc WatchProcessEvents(WatchProcessEventsRequest) returns (stream ProcessEvent);
+  rpc SetResourceLimits(SetResourceLimitsRequest) returns (google.protobuf.Empty);
+  rpc StreamProcessOutput(StreamOutputRequest) returns (stream ProcessOutputChunk);
+}
+
+message TerminateProcessRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  oneof target {
+    uint32 pid = 3;
+    cognyx.common.v1.Uuid process_handle_id = 4;
+  }
+  bool force = 5;
+  google.protobuf.Duration graceful_timeout = 6;
+}
+
+message SendSignalRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  uint32 pid = 3;
+  uint32 signal_number = 4;
+}
+
+message GetProcessInfoRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  uint32 pid = 3;
+}
+
+message ListProcessesRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  cognyx.common.v1.PaginationRequest pagination = 3;
+  optional cognyx.common.v1.Uuid workspace_id = 4;
+  optional cognyx.common.v1.IdentityId owner = 5;
+  optional ProcessStatus filter_status = 6;
+}
+
+message ListProcessesResponse {
+  repeated ProcessRecord processes = 1;
+  cognyx.common.v1.PaginationResponse pagination = 2;
+}
+
+message WatchProcessEventsRequest {
+  cognyx.common.v1.CapabilityToken cap = 1;
+  optional cognyx.common.v1.Uuid workspace_id = 2;
+  optional uint32 pid = 3;
+  repeated ProcessEvent.Type filter_types = 4;
+}
+
+message ProcessEvent {
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    SPAWNED = 1;
+    EXITED = 2;
+    SIGNALLED = 3;
+    OOM_KILLED = 4;
+    COREDUMPED = 5;
+    SUPERVISOR_RESTARTED = 6;
+    LIMIT_EXCEEDED = 7;
+  }
+  Type event_type = 1;
+  uint32 pid = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  optional int32 exit_code = 4;
+  optional uint32 signal = 5;
+  optional cognyx.common.v1.Error reason = 6;
+}
+
+message SetResourceLimitsRequest {
+  cognyx.common.v1.RequestMetadata meta = 1;
+  cognyx.common.v1.CapabilityToken cap = 2;
+  uint32 pid = 3;
+  ResourceLimits new_limits = 4;
+}
+
+message StreamOutputRequest {
+  cognyx.common.v1.CapabilityToken cap = 1;
+  uint32 pid = 2;
+  bool stdout = 3;
+  bool stderr = 4;
+  optional uint64 follow_from_offset_bytes = 5;
+}
+
+message ProcessOutputChunk {
+  uint64 sequence = 1;
+  bool is_stderr = 2;
+  bytes data = 3;
+  uint64 stream_position = 4;
+}
