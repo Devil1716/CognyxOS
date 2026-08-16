@@ -2,7 +2,7 @@ use crate::quota::{ResourceMetrics, ResourceQuota, ResourceReservation};
 use dashmap::DashMap;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{info, warn};
+use tracing::info;
 
 #[derive(Error, Debug)]
 pub enum ResourceError {

@@ -7,9 +7,9 @@
 
 use cognyx_agent_core::PermissionContext;
 use cognyx_agent_runtime::{
-    AgentCommunicationBus, AgentIdentity, AgentLifecycleManager, AgentLifecycleState,
-    AgentManager, AgentMessage, AgentMessageType, AgentPriority, AgentRegistry, AgentResourceLimits,
-    AgentRole, Artifact, ArtifactExchange, ArtifactType, DeadlockDetector, MultiAgentPlanner,
+    AgentCommunicationBus, AgentIdentity, AgentLifecycleManager, AgentLifecycleState, AgentManager,
+    AgentMessage, AgentMessageType, AgentRegistry, AgentResourceLimits, AgentRole, Artifact,
+    ArtifactExchange, ArtifactType, DeadlockDetector, MultiAgentPlanner,
 };
 use cognyx_execution::RuntimeRegistry;
 use cognyx_gateway::{CapabilityGateway, CapabilityRequest};
@@ -35,7 +35,13 @@ async fn test_01_basic_agent_spawning() {
 
     // Create root Manager agent
     let root = mgr
-        .create_agent("mgr-1", "Manager Agent", AgentRole::Manager, None, "task-01")
+        .create_agent(
+            "mgr-1",
+            "Manager Agent",
+            AgentRole::Manager,
+            None,
+            "task-01",
+        )
         .unwrap();
 
     assert_eq!(root.role, AgentRole::Manager);
@@ -44,7 +50,12 @@ async fn test_01_basic_agent_spawning() {
 
     // Spawn child Research agent
     let child = mgr
-        .spawn_child_agent(&root.agent_id, "res-1", "Research Agent", AgentRole::Researcher)
+        .spawn_child_agent(
+            &root.agent_id,
+            "res-1",
+            "Research Agent",
+            AgentRole::Researcher,
+        )
         .unwrap();
 
     assert_eq!(child.role, AgentRole::Researcher);
@@ -70,14 +81,30 @@ async fn test_01_basic_agent_spawning() {
 async fn test_02_parallel_agent_execution() {
     let mgr = create_test_manager();
     let root = mgr
-        .create_agent("mgr-parallel", "Manager Agent", AgentRole::Manager, None, "task-02")
+        .create_agent(
+            "mgr-parallel",
+            "Manager Agent",
+            AgentRole::Manager,
+            None,
+            "task-02",
+        )
         .unwrap();
 
     let agent_a = mgr
-        .spawn_child_agent(&root.agent_id, "agent-a", "Browser Agent", AgentRole::BrowserOperator)
+        .spawn_child_agent(
+            &root.agent_id,
+            "agent-a",
+            "Browser Agent",
+            AgentRole::BrowserOperator,
+        )
         .unwrap();
     let agent_b = mgr
-        .spawn_child_agent(&root.agent_id, "agent-b", "File Agent", AgentRole::FileOperator)
+        .spawn_child_agent(
+            &root.agent_id,
+            "agent-b",
+            "File Agent",
+            AgentRole::FileOperator,
+        )
         .unwrap();
 
     mgr.start_agent(&agent_a.agent_id).unwrap();
@@ -109,7 +136,7 @@ async fn test_02_parallel_agent_execution() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[tokio::test]
 async fn test_03_multi_agent_task_decomposition() {
-    let planner = MultiAgentPlanner::default();
+    let planner = MultiAgentPlanner::new();
     let intent = cognyx_intent::Intent {
         intent_id: "intent-03".into(),
         raw_prompt: "Find the test documents, analyze them, and create a summary.".into(),
@@ -121,13 +148,23 @@ async fn test_03_multi_agent_task_decomposition() {
     };
 
     let plan = planner.create_multi_agent_plan("task-03", &intent);
-    assert!(!plan.subtasks.is_empty(), "Plan must contain subtask assignments");
+    assert!(
+        !plan.subtasks.is_empty(),
+        "Plan must contain subtask assignments"
+    );
 
-    let roles: Vec<_> = plan.subtasks.iter().map(|s| s.assigned_role.clone()).collect();
+    let roles: Vec<_> = plan
+        .subtasks
+        .iter()
+        .map(|s| s.assigned_role.clone())
+        .collect();
     assert!(roles.contains(&AgentRole::FileOperator) || roles.contains(&AgentRole::Researcher));
     assert!(roles.contains(&AgentRole::Writer) || roles.contains(&AgentRole::Analyst));
 
-    println!("PASS: test_03_multi_agent_task_decomposition: {} subtasks generated", plan.subtasks.len());
+    println!(
+        "PASS: test_03_multi_agent_task_decomposition: {} subtasks generated",
+        plan.subtasks.len()
+    );
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -157,7 +194,11 @@ async fn test_04_real_windows_computer_agent() {
         })
         .await;
 
-    assert!(result.success, "Computer Operator Agent failed: {:?}", result.error);
+    assert!(
+        result.success,
+        "Computer Operator Agent failed: {:?}",
+        result.error
+    );
     println!("PASS: test_04_real_windows_computer_agent");
 }
 
@@ -188,7 +229,10 @@ async fn test_05_browser_agent() {
         .await;
 
     if !result.success {
-        eprintln!("Browser Agent skipped: {}", result.error.unwrap_or_default());
+        eprintln!(
+            "Browser Agent skipped: {}",
+            result.error.unwrap_or_default()
+        );
         return;
     }
     println!("PASS: test_05_browser_agent");
@@ -212,7 +256,9 @@ async fn test_06_cross_agent_artifact_exchange() {
 
     exchange.register_artifact(artifact.clone()).unwrap();
 
-    let fetched = exchange.get_artifact("art-01", "agent-consumer", "task-06").unwrap();
+    let fetched = exchange
+        .get_artifact("art-01", "agent-consumer", "task-06")
+        .unwrap();
     assert_eq!(fetched.artifact_id, "art-01");
     assert_eq!(fetched.checksum, artifact.checksum);
 
@@ -242,8 +288,12 @@ async fn test_07_permission_isolation_and_no_escalation() {
     };
 
     // Child attempts to request filesystem.delete (not possessed by parent)
-    let is_allowed = cognyx_agent_runtime::evaluate_permission_inheritance(&parent, "filesystem.delete");
-    assert!(!is_allowed, "Child must NOT escalate permissions beyond parent!");
+    let is_allowed =
+        cognyx_agent_runtime::evaluate_permission_inheritance(&parent, "filesystem.delete");
+    assert!(
+        !is_allowed,
+        "Child must NOT escalate permissions beyond parent!"
+    );
 
     println!("PASS: test_07_permission_isolation_and_no_escalation");
 }
@@ -255,13 +305,20 @@ async fn test_07_permission_isolation_and_no_escalation() {
 async fn test_08_agent_failure_detection_and_recovery() {
     let mgr = create_test_manager();
     let agent = mgr
-        .create_agent("agent-fail", "Failing Agent", AgentRole::Worker, None, "task-08")
+        .create_agent(
+            "agent-fail",
+            "Failing Agent",
+            AgentRole::Worker,
+            None,
+            "task-08",
+        )
         .unwrap();
 
     mgr.start_agent(&agent.agent_id).unwrap();
 
     // Force failure transition
-    mgr.fail_agent(&agent.agent_id, "Simulated worker crash").unwrap();
+    mgr.fail_agent(&agent.agent_id, "Simulated worker crash")
+        .unwrap();
 
     let failed = mgr.get_agent(&agent.agent_id).unwrap();
     assert!(matches!(failed.status, AgentLifecycleState::Failed(_)));
@@ -281,11 +338,21 @@ async fn test_08_agent_failure_detection_and_recovery() {
 async fn test_09_root_cancellation_propagation() {
     let mgr = create_test_manager();
     let root = mgr
-        .create_agent("root-cancel", "Root Agent", AgentRole::Manager, None, "task-09")
+        .create_agent(
+            "root-cancel",
+            "Root Agent",
+            AgentRole::Manager,
+            None,
+            "task-09",
+        )
         .unwrap();
 
-    let child_a = mgr.spawn_child_agent(&root.agent_id, "child-a", "Child A", AgentRole::Worker).unwrap();
-    let child_b = mgr.spawn_child_agent(&root.agent_id, "child-b", "Child B", AgentRole::Worker).unwrap();
+    let child_a = mgr
+        .spawn_child_agent(&root.agent_id, "child-a", "Child A", AgentRole::Worker)
+        .unwrap();
+    let child_b = mgr
+        .spawn_child_agent(&root.agent_id, "child-b", "Child B", AgentRole::Worker)
+        .unwrap();
 
     mgr.start_agent(&root.agent_id).unwrap();
     mgr.start_agent(&child_a.agent_id).unwrap();
@@ -312,16 +379,36 @@ async fn test_09_root_cancellation_propagation() {
 async fn test_10_resource_limit_enforcement() {
     let mgr = create_test_manager();
     let root = mgr
-        .create_agent("root-quota", "Root Agent", AgentRole::Manager, None, "task-10")
+        .create_agent(
+            "root-quota",
+            "Root Agent",
+            AgentRole::Manager,
+            None,
+            "task-10",
+        )
         .unwrap();
 
     // Default max children per parent is 8. Attempting to spawn 9 children must fail.
     for i in 0..8 {
-        mgr.spawn_child_agent(&root.agent_id, &format!("c-{}", i), "Child", AgentRole::Worker).unwrap();
+        mgr.spawn_child_agent(
+            &root.agent_id,
+            format!("c-{}", i),
+            "Child",
+            AgentRole::Worker,
+        )
+        .unwrap();
     }
 
-    let overflow = mgr.spawn_child_agent(&root.agent_id, "c-overflow", "Child Overflow", AgentRole::Worker);
-    assert!(overflow.is_err(), "Spawning child beyond quota must be rejected");
+    let overflow = mgr.spawn_child_agent(
+        &root.agent_id,
+        "c-overflow",
+        "Child Overflow",
+        AgentRole::Worker,
+    );
+    assert!(
+        overflow.is_err(),
+        "Spawning child beyond quota must be rejected"
+    );
 
     println!("PASS: test_10_resource_limit_enforcement");
 }
@@ -338,7 +425,10 @@ async fn test_11_deadlock_detection_and_rejection() {
     detector.add_dependency("AgentB", "AgentC");
     detector.add_dependency("AgentC", "AgentA");
 
-    assert!(detector.detect_cycle(), "Deadlock detector MUST detect cyclic agent dependency!");
+    assert!(
+        detector.detect_cycle(),
+        "Deadlock detector MUST detect cyclic agent dependency!"
+    );
 
     println!("PASS: test_11_deadlock_detection_and_rejection");
 }
@@ -354,19 +444,40 @@ async fn test_12_full_cognyxos_multi_agent_demo() {
 
     // 1. User submits intent -> Manager Agent created
     let manager = mgr
-        .create_agent("mgr-demo", "Manager Agent", AgentRole::Manager, None, "task-demo-12")
+        .create_agent(
+            "mgr-demo",
+            "Manager Agent",
+            AgentRole::Manager,
+            None,
+            "task-demo-12",
+        )
         .unwrap();
     mgr.start_agent(&manager.agent_id).unwrap();
 
     // 2. Manager spawns File Agent, Research Agent, Analysis Agent, Writer Agent
     let file_agent = mgr
-        .spawn_child_agent(&manager.agent_id, "file-agent", "File Agent", AgentRole::FileOperator)
+        .spawn_child_agent(
+            &manager.agent_id,
+            "file-agent",
+            "File Agent",
+            AgentRole::FileOperator,
+        )
         .unwrap();
     let res_agent = mgr
-        .spawn_child_agent(&manager.agent_id, "res-agent", "Research Agent", AgentRole::Researcher)
+        .spawn_child_agent(
+            &manager.agent_id,
+            "res-agent",
+            "Research Agent",
+            AgentRole::Researcher,
+        )
         .unwrap();
     let writer_agent = mgr
-        .spawn_child_agent(&manager.agent_id, "writer-agent", "Writer Agent", AgentRole::Writer)
+        .spawn_child_agent(
+            &manager.agent_id,
+            "writer-agent",
+            "Writer Agent",
+            AgentRole::Writer,
+        )
         .unwrap();
 
     mgr.start_agent(&file_agent.agent_id).unwrap();
@@ -415,7 +526,9 @@ async fn test_12_full_cognyxos_multi_agent_demo() {
     mgr.stop_agent(&writer_agent.agent_id).unwrap();
     mgr.stop_agent(&manager.agent_id).unwrap();
 
-    let report = exchange.get_artifact("art-final-report", &manager.agent_id, "task-demo-12").unwrap();
+    let report = exchange
+        .get_artifact("art-final-report", &manager.agent_id, "task-demo-12")
+        .unwrap();
     assert_eq!(report.artifact_id, "art-final-report");
 
     println!("PASS: test_12_full_cognyxos_multi_agent_demo successfully completed!");

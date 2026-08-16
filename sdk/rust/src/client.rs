@@ -2,11 +2,8 @@ use ed25519_dalek::{Signer, SigningKey};
 use rand::rngs::OsRng;
 use std::path::PathBuf;
 use thiserror::Error;
-use tracing::{error, info};
 
-use cognyx_proto::cognyx::bus::v1::{
-    MessageEnvelope, MessageType, RegisterModuleRequest, RegisterModuleResponse, Target,
-};
+use cognyx_proto::cognyx::bus::v1::{MessageEnvelope, MessageType, Target};
 use cognyx_proto::cognyx::common::v1::{IdentityId, Priority, Uuid};
 
 #[derive(Error, Debug)]

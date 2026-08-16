@@ -1,0 +1,25 @@
+[package]
+name = "cognyx-hardening"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "cognyx_hardening"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cognyx-doctor"
+path = "src/doctor.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+sha2 = { workspace = true }
+uuid = { workspace = true }
+dashmap = { workspace = true }
+toml = { workspace = true }

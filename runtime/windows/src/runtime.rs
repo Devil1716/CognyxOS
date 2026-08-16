@@ -22,6 +22,20 @@ impl WindowsRuntime {
             automation: WindowsAppAutomation::new(&id_str),
         }
     }
+
+    /// Native Windows host identity for RuntimeRegistry. Does not start a VM.
+    /// `execute_command` still goes through the existing automation adapter
+    /// (formatted string — not used by CapabilityGateway after VAL-001).
+    pub fn host() -> Self {
+        let id = cognyx_execution::native_host_runtime_id();
+        Self {
+            id: id.to_string(),
+            name: cognyx_execution::native_host_runtime_name().to_string(),
+            status: RuntimeStatus::Running,
+            vm_manager: WindowsVmManager::default(),
+            automation: WindowsAppAutomation::new(id),
+        }
+    }
 }
 
 #[async_trait]
@@ -48,11 +62,19 @@ impl ExecutionRuntime for WindowsRuntime {
     }
 
     fn location(&self) -> String {
-        "local-kvm".to_string()
+        if self.id == cognyx_execution::native_host_runtime_id() {
+            "local-host".to_string()
+        } else {
+            "local-kvm".to_string()
+        }
     }
 
     fn security_level(&self) -> u32 {
-        4 // Full hardware isolated VM
+        if self.id == cognyx_execution::native_host_runtime_id() {
+            1
+        } else {
+            4 // Full hardware isolated VM
+        }
     }
 
     fn available_tools(&self) -> Vec<String> {
@@ -105,5 +127,13 @@ mod tests {
 
         runtime.stop().await.unwrap();
         assert_eq!(runtime.status(), RuntimeStatus::Stopped);
+    }
+
+    #[test]
+    fn native_host_identity_is_windows_not_linux() {
+        let host = WindowsRuntime::host();
+        assert!(!host.runtime_id().to_lowercase().contains("linux"));
+        assert!(host.runtime_id().to_lowercase().contains("windows"));
+        assert_eq!(host.status(), RuntimeStatus::Running);
     }
 }

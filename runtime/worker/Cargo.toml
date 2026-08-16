@@ -1,0 +1,24 @@
+[package]
+name = "cognyx-worker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "cognyx_worker"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+dashmap = { workspace = true }
+sha2 = { workspace = true }
+cognyx-execution = { path = "../execution" }
+cognyx-task-manager = { path = "../agent/task_manager" }

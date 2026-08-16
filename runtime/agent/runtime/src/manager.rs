@@ -1,10 +1,10 @@
-use std::sync::Arc;
-use crate::registry::AgentRegistry;
-use crate::lifecycle::{AgentLifecycleManager, AgentLifecycleState};
 use crate::bus::AgentCommunicationBus;
 use crate::identity::AgentIdentity;
+use crate::lifecycle::{AgentLifecycleManager, AgentLifecycleState};
+use crate::registry::AgentRegistry;
 use crate::role::AgentRole;
 use cognyx_resources::ResourceManager;
+use std::sync::Arc;
 
 #[allow(dead_code)]
 pub struct AgentManager {
@@ -39,7 +39,14 @@ impl AgentManager {
     ) -> Result<Arc<AgentIdentity>, String> {
         let aid = agent_id.into();
         let display_name = name.into();
-        let agent = AgentIdentity::new(&aid, &display_name, &display_name, role, parent_agent_id, task_id);
+        let agent = AgentIdentity::new(
+            &aid,
+            &display_name,
+            &display_name,
+            role,
+            parent_agent_id,
+            task_id,
+        );
 
         if let Some(ref parent) = agent.parent_agent_id {
             let children = self.registry.get_children(parent);
@@ -59,8 +66,16 @@ impl AgentManager {
         name: impl Into<String>,
         role: AgentRole,
     ) -> Result<Arc<AgentIdentity>, String> {
-        let parent = self.get_agent(parent_id).ok_or_else(|| "Parent agent not found".to_string())?;
-        self.create_agent(child_id, name, role, Some(parent_id.to_string()), &parent.root_agent_id)
+        let parent = self
+            .get_agent(parent_id)
+            .ok_or_else(|| "Parent agent not found".to_string())?;
+        self.create_agent(
+            child_id,
+            name,
+            role,
+            Some(parent_id.to_string()),
+            &parent.root_agent_id,
+        )
     }
 
     pub fn start_agent(&self, agent_id: &str) -> Result<(), String> {
@@ -100,7 +115,11 @@ impl AgentManager {
         }
     }
 
-    pub fn fail_agent(&self, agent_id: &str, error_message: impl Into<String>) -> Result<(), String> {
+    pub fn fail_agent(
+        &self,
+        agent_id: &str,
+        error_message: impl Into<String>,
+    ) -> Result<(), String> {
         if let Some(agent) = self.registry.get(agent_id) {
             let mut updated = (*agent).clone();
             updated.status = AgentLifecycleState::Failed(error_message.into());

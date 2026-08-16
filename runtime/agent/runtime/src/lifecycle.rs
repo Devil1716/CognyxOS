@@ -1,7 +1,7 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum AgentLifecycleState {
@@ -59,11 +59,16 @@ impl AgentLifecycleManager {
             states: Arc::new(Mutex::new(HashMap::new())),
         }
     }
-    
-    pub async fn transition(&self, agent_id: &str, new_state: AgentLifecycleState) -> Result<(), String> {
+
+    pub async fn transition(
+        &self,
+        agent_id: &str,
+        new_state: AgentLifecycleState,
+    ) -> Result<(), String> {
         let mut states = self.states.lock().await;
         states.insert(agent_id.to_string(), new_state);
-        self.publisher.publish(&format!("Agent {} state changed", agent_id));
+        self.publisher
+            .publish(&format!("Agent {} state changed", agent_id));
         Ok(())
     }
 }

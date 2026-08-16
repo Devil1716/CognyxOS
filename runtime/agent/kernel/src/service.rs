@@ -1,7 +1,9 @@
 use cognyx_agent_core::AgentEventPublisher;
 use cognyx_agent_memory::ContextEngine;
 use cognyx_agent_scheduler::GraphScheduler;
-use cognyx_execution::{LinuxRuntime, RuntimeRegistry};
+#[cfg(not(target_os = "windows"))]
+use cognyx_execution::LinuxRuntime;
+use cognyx_execution::RuntimeRegistry;
 use cognyx_gateway::{CapabilityGateway, CapabilityRequest};
 use cognyx_intent::IntentEngine;
 use cognyx_planner::AgentPlanner;
@@ -13,6 +15,8 @@ use cognyx_proto::cognyx::services::agent::v1::task_manager_service_server::Task
 use cognyx_proto::cognyx::services::agent::v1::*;
 use cognyx_resources::ResourceManager;
 use cognyx_task_manager::{AgentTaskManager, TaskStatus};
+#[cfg(target_os = "windows")]
+use cognyx_windows::WindowsRuntime;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -35,9 +39,23 @@ impl Default for AgentKernelServer {
 }
 
 impl AgentKernelServer {
+    fn register_native_host(registry: &RuntimeRegistry) {
+        #[cfg(target_os = "windows")]
+        {
+            let _ = registry.register(Box::new(WindowsRuntime::host()));
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = registry.register(Box::new(LinuxRuntime::new(
+                cognyx_execution::native_host_runtime_id(),
+                cognyx_execution::native_host_runtime_name(),
+            )));
+        }
+    }
+
     pub fn new() -> Self {
         let registry = Arc::new(RuntimeRegistry::new());
-        let _ = registry.register(Box::new(LinuxRuntime::new("host-linux-1", "Host Linux")));
+        Self::register_native_host(&registry);
 
         let res_mgr = Arc::new(ResourceManager::default());
         let intent_engine = Arc::new(IntentEngine::default());
@@ -57,6 +75,20 @@ impl AgentKernelServer {
             registry,
         }
     }
+
+    fn proto_status(status: &TaskStatus) -> i32 {
+        (match status {
+            TaskStatus::Created | TaskStatus::Planning => TaskState::Created,
+            TaskStatus::Ready => TaskState::Ready,
+            TaskStatus::Running => TaskState::Running,
+            TaskStatus::Waiting | TaskStatus::Blocked => TaskState::Waiting,
+            TaskStatus::Paused => TaskState::Paused,
+            TaskStatus::Failed(_) => TaskState::Failed,
+            TaskStatus::Recovering => TaskState::Recovering,
+            TaskStatus::Completed => TaskState::Completed,
+            TaskStatus::Cancelled => TaskState::Cancelled,
+        }) as i32
+    }
 }
 
 #[tonic::async_trait]
@@ -74,7 +106,34 @@ impl AgentKernelService for AgentKernelServer {
         AgentEventPublisher::publish("agent.task_created", &task.task_id, &req.prompt);
         AgentEventPublisher::publish("agent.task_planning", &task.task_id, &task.intent.intent_id);
 
-        let plan = self.planner.create_plan(&task.task_id, &task.intent).await;
+        let plan = match self.planner.create_plan(&task.task_id, &task.intent).await {
+            Ok(plan) => plan,
+            Err(error) => {
+                let _ = self
+                    .task_manager
+                    .update_status(&task.task_id, TaskStatus::Failed(error.clone()));
+                AgentEventPublisher::publish("agent.plan_invalid", &task.task_id, &error);
+                return Ok(Response::new(TaskHandle {
+                    task_id: task.task_id,
+                    status: TaskState::Failed as i32,
+                    submitted_at: Some(prost_types::Timestamp::from(std::time::SystemTime::now())),
+                }));
+            }
+        };
+        let validation = plan.validate();
+        if !validation.is_valid {
+            let error = validation.validation_errors.join("; ");
+            let _ = self
+                .task_manager
+                .update_status(&task.task_id, TaskStatus::Failed(error.clone()));
+            AgentEventPublisher::publish("agent.plan_invalid", &task.task_id, &error);
+            return Ok(Response::new(TaskHandle {
+                task_id: task.task_id,
+                status: TaskState::Failed as i32,
+                submitted_at: Some(prost_types::Timestamp::from(std::time::SystemTime::now())),
+            }));
+        }
+        info!(plan_id = %plan.plan_id, nodes = plan.steps.len(), intent = %task.intent.original_prompt, "validated execution plan");
         AgentEventPublisher::publish("agent.plan_created", &task.task_id, &plan.plan_id);
 
         let graph = self.planner.compile_plan_to_graph(&plan);
@@ -87,28 +146,72 @@ impl AgentKernelService for AgentKernelServer {
             .task_manager
             .update_status(&task.task_id, TaskStatus::Running);
 
-        let completed = HashSet::new();
-        let ready_nodes = self.scheduler.get_ready_nodes(&graph, &completed);
+        let scheduler = self.scheduler.clone();
         let gateway = self.gateway.clone();
         let task_id = task.task_id.clone();
         let task_mgr = self.task_manager.clone();
 
         tokio::spawn(async move {
-            for node in ready_nodes {
-                AgentEventPublisher::publish("agent.node_started", &task_id, &node.node_id);
-                match gateway.dispatch_node_execution(&node).await {
-                    Ok(out) => {
-                        AgentEventPublisher::publish("agent.node_completed", &task_id, &out);
+            let mut completed = HashSet::new();
+            let mut outputs = HashMap::new();
+            loop {
+                let ready_nodes = scheduler.get_ready_nodes(&graph, &completed);
+                if ready_nodes.is_empty() {
+                    if completed.len() == graph.nodes.len() {
+                        AgentEventPublisher::publish(
+                            "agent.task_completed",
+                            &task_id,
+                            "All nodes completed",
+                        );
+                        let _ = task_mgr.update_status(&task_id, TaskStatus::Completed);
+                    } else {
+                        let error = "PLAN_INVALID: execution graph has unsatisfied dependencies"
+                            .to_string();
+                        AgentEventPublisher::publish("agent.node_failed", &task_id, &error);
+                        let _ = task_mgr.update_status(&task_id, TaskStatus::Failed(error));
                     }
-                    Err(err) => {
-                        AgentEventPublisher::publish("agent.node_failed", &task_id, &err);
-                        let _ = task_mgr.update_status(&task_id, TaskStatus::Failed(err));
-                        return;
+                    return;
+                }
+                for node in ready_nodes {
+                    let started = std::time::Instant::now();
+                    AgentEventPublisher::publish("agent.node_started", &task_id, &node.node_id);
+                    match gateway
+                        .dispatch_node_execution_with_outputs(&node, &outputs)
+                        .await
+                    {
+                        Ok(out) => {
+                            info!(
+                                task_id = %task_id,
+                                plan_id = %graph.graph_id,
+                                node_id = %node.node_id,
+                                capability = ?node.required_capabilities,
+                                depends_on = ?node.depends_on,
+                                duration_ms = started.elapsed().as_millis() as u64,
+                                status = "COMPLETED",
+                                "plan node completed"
+                            );
+                            outputs.insert(node.node_id.clone(), out.clone());
+                            completed.insert(node.node_id.clone());
+                            AgentEventPublisher::publish("agent.node_completed", &task_id, &out);
+                        }
+                        Err(err) => {
+                            info!(
+                                task_id = %task_id,
+                                plan_id = %graph.graph_id,
+                                node_id = %node.node_id,
+                                capability = ?node.required_capabilities,
+                                duration_ms = started.elapsed().as_millis() as u64,
+                                status = "FAILED",
+                                error = %err,
+                                "plan node failed"
+                            );
+                            AgentEventPublisher::publish("agent.node_failed", &task_id, &err);
+                            let _ = task_mgr.update_status(&task_id, TaskStatus::Failed(err));
+                            return;
+                        }
                     }
                 }
             }
-            AgentEventPublisher::publish("agent.task_completed", &task_id, "All nodes completed");
-            let _ = task_mgr.update_status(&task_id, TaskStatus::Completed);
         });
 
         Ok(Response::new(TaskHandle {
@@ -134,7 +237,7 @@ impl AgentKernelService for AgentKernelServer {
             parent_task_id: String::new(),
             user_id: "user-default".to_string(),
             prompt: task.prompt,
-            status: TaskState::Running as i32,
+            status: Self::proto_status(&task.status),
             priority: task.priority,
             required_capabilities: task.required_capabilities,
             plan: None,
@@ -284,8 +387,24 @@ impl PlannerService for AgentKernelServer {
         request: Request<GeneratePlanRequest>,
     ) -> Result<Response<GeneratePlanResponse>, Status> {
         let req = request.into_inner();
-        let parsed = self.intent_engine.parse_prompt("default").await;
-        let plan = self.planner.create_plan(&req.task_id, &parsed).await;
+        let parsed = match req.intent {
+            Some(intent) if !intent.original_prompt.is_empty() => {
+                self.intent_engine
+                    .parse_prompt(&intent.original_prompt)
+                    .await
+            }
+            _ => {
+                return Err(Status::invalid_argument(
+                    "GeneratePlanRequest.intent.original_prompt is required",
+                ))
+            }
+        };
+        let plan = self
+            .planner
+            .create_plan(&req.task_id, &parsed)
+            .await
+            .map_err(Status::invalid_argument)?;
+        let validation = plan.validate();
 
         let steps_proto = plan
             .steps
@@ -308,9 +427,9 @@ impl PlannerService for AgentKernelServer {
                 created_at: Some(prost_types::Timestamp::from(std::time::SystemTime::now())),
             }),
             validation: Some(PlanValidationResult {
-                is_valid: true,
-                validation_errors: vec![],
-                missing_capabilities: vec![],
+                is_valid: validation.is_valid,
+                validation_errors: validation.validation_errors,
+                missing_capabilities: validation.missing_capabilities,
             }),
         }))
     }

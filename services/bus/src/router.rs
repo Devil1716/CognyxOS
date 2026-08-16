@@ -5,9 +5,11 @@ use tokio::sync::{mpsc, RwLock};
 use tracing::{info, warn};
 
 use cognyx_proto::cognyx::bus::v1::target::Target as TargetTarget;
-use cognyx_proto::cognyx::bus::v1::{MessageEnvelope, MessageType, Target};
+use cognyx_proto::cognyx::bus::v1::{MessageEnvelope, Target};
 
 pub type EnvelopeSender = mpsc::Sender<Result<MessageEnvelope, tonic::Status>>;
+type TopicSubscriber = (String, EnvelopeSender);
+type TopicSubscriptionMap = HashMap<String, Vec<TopicSubscriber>>;
 
 #[derive(Clone, Debug)]
 pub struct CommandRecord {
@@ -31,7 +33,7 @@ pub type BusRouter = MessageRouter;
 
 pub struct MessageRouter {
     // Topic subscriptions: topic_name -> list of subscriber tx channels
-    subscriptions: Arc<RwLock<HashMap<String, Vec<(String, EnvelopeSender)>>>>,
+    subscriptions: Arc<RwLock<TopicSubscriptionMap>>,
     // Unicast module streams: module_identity -> tx channel
     module_channels: DashMap<String, EnvelopeSender>,
     // In-flight commands: command_id -> CommandRecord
@@ -89,49 +91,47 @@ impl MessageRouter {
     }
 
     pub async fn route_envelope(&self, envelope: MessageEnvelope) -> Result<(), String> {
-        let msg_type = envelope.r#type;
-
-        if let Some(target) = envelope.target.clone() {
-            match target.target {
+        match envelope.target.clone() {
+            Some(target) => match target.target {
                 Some(TargetTarget::Module(identity_id)) => {
                     let target_module = identity_id.value;
                     if let Some(sender) = self.module_channels.get(&target_module) {
                         sender.send(Ok(envelope)).await.map_err(|e| e.to_string())?;
-                        return Ok(());
+                        Ok(())
                     } else {
                         warn!(
                             "Target module '{}' not connected. Stashing in DLQ.",
                             target_module
                         );
                         self.push_dead_letter(envelope).await;
-                        return Err(format!("Target module '{}' unavailable", target_module));
+                        Err(format!("Target module '{}' unavailable", target_module))
                     }
                 }
                 Some(TargetTarget::Topic(topic)) => {
                     self.publish_event(&topic, envelope).await;
-                    return Ok(());
+                    Ok(())
                 }
-
                 Some(TargetTarget::BroadcastAll(_)) => {
                     for entry in self.module_channels.iter() {
                         let _ = entry.value().send(Ok(envelope.clone())).await;
                     }
-                    return Ok(());
+                    Ok(())
                 }
                 Some(TargetTarget::WorkspaceBroadcast(_ws_id)) => {
                     for entry in self.module_channels.iter() {
                         let _ = entry.value().send(Ok(envelope.clone())).await;
                     }
-                    return Ok(());
+                    Ok(())
                 }
                 None => {
                     self.push_dead_letter(envelope).await;
-                    return Err("Target specifier missing in envelope".to_string());
+                    Err("Target specifier missing in envelope".to_string())
                 }
+            },
+            None => {
+                self.push_dead_letter(envelope).await;
+                Err("No target provided in message envelope".to_string())
             }
-        } else {
-            self.push_dead_letter(envelope).await;
-            Err("No target provided in message envelope".to_string())
         }
     }
 
@@ -211,6 +211,7 @@ impl MessageRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cognyx_proto::cognyx::bus::v1::MessageType;
     use cognyx_proto::cognyx::common::v1::IdentityId;
 
     #[tokio::test]

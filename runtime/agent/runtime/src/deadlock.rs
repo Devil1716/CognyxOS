@@ -13,7 +13,10 @@ impl DeadlockDetector {
     }
 
     pub fn add_dependency(&mut self, from: &str, to: &str) {
-        self.graph.entry(from.to_string()).or_default().push(to.to_string());
+        self.graph
+            .entry(from.to_string())
+            .or_default()
+            .push(to.to_string());
     }
 
     pub fn detect_cycle(&self) -> bool {

@@ -227,6 +227,7 @@ dependencies = [
  "dashmap 6.2.1",
  "prost",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tonic",
@@ -374,6 +375,8 @@ name = "cognyx-cli"
 version = "0.1.0"
 dependencies = [
  "cognyx-capability",
+ "cognyx-hardening",
+ "cognyx-plugin",
  "cognyx-proto",
  "cognyx-sdk",
  "prost",
@@ -408,14 +411,24 @@ name = "cognyx-e2e"
 version = "0.1.0"
 dependencies = [
  "cognyx-agent-core",
+ "cognyx-agent-kernel",
+ "cognyx-agent-memory",
  "cognyx-agent-runtime",
  "cognyx-capability",
  "cognyx-execution",
  "cognyx-gateway",
+ "cognyx-hardening",
  "cognyx-intent",
+ "cognyx-planner",
+ "cognyx-plugin",
+ "cognyx-proto",
  "cognyx-resources",
+ "cognyx-service-workspace",
+ "cognyx-shell",
+ "cognyx-worker",
  "serde_json",
  "tokio",
+ "tonic",
  "uuid",
 ]
 
@@ -472,6 +485,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cognyx-hardening"
+version = "0.1.0"
+dependencies = [
+ "dashmap 6.2.1",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "toml",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "cognyx-intent"
 version = "0.1.0"
 dependencies = [
@@ -516,6 +543,19 @@ dependencies = [
  "thiserror",
  "tokio",
  "tonic",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "cognyx-plugin"
+version = "0.1.0"
+dependencies = [
+ "dashmap 6.2.1",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
  "tracing",
  "uuid",
 ]
@@ -871,15 +911,44 @@ dependencies = [
 name = "cognyx-service-workspace"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "cognyx-agent-core",
+ "cognyx-execution",
  "cognyx-proto",
  "cognyx-sdk",
+ "dashmap 6.2.1",
  "prost",
  "serde",
+ "serde_json",
+ "sha2",
  "thiserror",
  "tokio",
  "tonic",
  "tracing",
  "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "cognyx-shell"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "cognyx-agent-core",
+ "cognyx-agent-kernel",
+ "cognyx-execution",
+ "cognyx-proto",
+ "cognyx-service-workspace",
+ "cognyx-task-manager",
+ "dashmap 6.2.1",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -948,6 +1017,23 @@ dependencies = [
  "thiserror",
  "tokio",
  "tonic",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "cognyx-worker"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "cognyx-execution",
+ "cognyx-task-manager",
+ "dashmap 6.2.1",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio",
  "tracing",
  "uuid",
 ]

@@ -6,17 +6,28 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+name = "cognyx_service_workspace"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cognyx-service-workspace"
+path = "src/main.rs"
+
 [dependencies]
 tokio = { workspace = true }
 tonic = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+sha2 = { workspace = true }
+dashmap = { workspace = true }
+async-trait = { workspace = true }
 cognyx-proto = { workspace = true }
 cognyx-sdk = { workspace = true }
-
-[[bin]]
-name = "cognyx-service-workspace"
-path = "src/main.rs"
+cognyx-agent-core = { path = "../../runtime/agent/core" }
+cognyx-execution = { path = "../../runtime/execution" }

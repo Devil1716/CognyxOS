@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum AgentRole {
@@ -35,7 +35,7 @@ impl AgentRole {
             _ => RolePolicy {
                 default_capability_scopes: vec![],
                 default_permissions: vec![],
-            }
+            },
         }
     }
 }

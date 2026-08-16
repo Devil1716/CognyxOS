@@ -3,6 +3,7 @@
 
 pub mod adapters;
 pub mod browser;
+pub mod gui_test;
 pub mod layer;
 pub mod model;
 pub mod native;
@@ -16,6 +17,7 @@ pub use adapters::{
     LocalFilesystemProvider, MacOSCapabilityAdapter, WindowsCapabilityAdapter,
 };
 pub use browser::UniversalBrowserProvider;
+pub use gui_test::{GOLDEN_FILENAME, TEST_WORKSPACE};
 pub use layer::UniversalCapabilityLayer;
 pub use model::*;
 #[cfg(target_os = "windows")]

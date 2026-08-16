@@ -8,10 +8,20 @@ cognyx-capability = { path = "../../runtime/capability" }
 cognyx-gateway = { path = "../../runtime/agent/gateway" }
 cognyx-agent-core = { path = "../../runtime/agent/core" }
 cognyx-agent-runtime = { path = "../../runtime/agent/runtime" }
+cognyx-agent-kernel = { path = "../../runtime/agent/kernel" }
+cognyx-agent-memory = { path = "../../runtime/agent/memory" }
 cognyx-intent = { path = "../../runtime/agent/intent" }
+cognyx-planner = { path = "../../runtime/agent/planner" }
 cognyx-resources = { path = "../../runtime/resources" }
 cognyx-execution = { path = "../../runtime/execution" }
+cognyx-service-workspace = { path = "../../services/workspace" }
+cognyx-shell = { path = "../../ui/shell" }
+cognyx-worker = { path = "../../runtime/worker" }
+cognyx-plugin = { path = "../../runtime/plugin" }
+cognyx-hardening = { path = "../../system/hardening" }
+cognyx-proto = { workspace = true }
 tokio = { workspace = true }
+tonic = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 
@@ -22,3 +32,11 @@ path = "tests/e2e_phase5.rs"
 [[test]]
 name = "e2e_phase6"
 path = "tests/e2e_phase6.rs"
+
+[[test]]
+name = "system_validation"
+path = "tests/system_validation.rs"
+
+[[test]]
+name = "phase13"
+path = "tests/phase13.rs"

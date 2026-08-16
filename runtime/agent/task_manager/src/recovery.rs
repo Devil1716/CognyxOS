@@ -1,4 +1,4 @@
-use crate::manager::{AgentTask, TaskStatus};
+use crate::manager::AgentTask;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 

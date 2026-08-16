@@ -48,6 +48,10 @@ members = [
     "runtime/agent/kernel",
     "runtime/agent/runtime",
     "tests/e2e",
+    "ui/shell",
+    "runtime/worker",
+    "runtime/plugin",
+    "system/hardening",
 ]
 
 

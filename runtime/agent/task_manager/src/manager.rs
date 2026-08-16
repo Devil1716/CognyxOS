@@ -1,4 +1,4 @@
-use crate::checkpoint::{CheckpointEngine, CheckpointState};
+use crate::checkpoint::{CheckpointEngine, CheckpointRequest, CheckpointState};
 use crate::store::AgentStateStore;
 use cognyx_intent::{IntentEngine, ParsedIntent};
 use serde::{Deserialize, Serialize};
@@ -136,16 +136,16 @@ impl AgentTaskManager {
             .store
             .get_task(task_id)
             .ok_or_else(|| TaskError::NotFound(task_id.to_string()))?;
-        let chk = CheckpointEngine::create_checkpoint(
-            task_id,
-            &format!("{:?}", task.status),
-            graph_id,
-            completed,
-            pending,
-            None,
-            task.assigned_runtime.clone(),
-            outputs,
-        );
+        let chk = CheckpointEngine::create_checkpoint(CheckpointRequest {
+            task_id: task_id.to_string(),
+            task_state: format!("{:?}", task.status),
+            graph_id: graph_id.to_string(),
+            completed_nodes: completed,
+            pending_nodes: pending,
+            current_node: None,
+            assigned_runtime: task.assigned_runtime.clone(),
+            node_outputs: outputs,
+        });
         task.checkpoint = Some(chk);
         self.store.save_task(&task);
         Ok(task)

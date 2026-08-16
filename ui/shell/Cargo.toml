@@ -1,0 +1,33 @@
+[package]
+name = "cognyx-shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "cognyx_shell"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cognyx-shell"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+dashmap = { workspace = true }
+async-trait = { workspace = true }
+tonic = { workspace = true }
+cognyx-service-workspace = { path = "../../services/workspace" }
+cognyx-agent-core = { path = "../../runtime/agent/core" }
+cognyx-agent-kernel = { path = "../../runtime/agent/kernel" }
+cognyx-task-manager = { path = "../../runtime/agent/task_manager" }
+cognyx-proto = { workspace = true }
+cognyx-execution = { path = "../../runtime/execution" }

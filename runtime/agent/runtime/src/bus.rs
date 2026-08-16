@@ -1,7 +1,7 @@
-use serde::{Serialize, Deserialize};
 use dashmap::DashMap;
-use tokio::sync::broadcast;
+use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
+use tokio::sync::broadcast;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AgentMessageType {
@@ -36,6 +36,12 @@ pub struct AgentMessage {
 pub struct AgentCommunicationBus {
     routers: DashMap<String, broadcast::Sender<AgentMessage>>,
     log: Mutex<Vec<AgentMessage>>,
+}
+
+impl Default for AgentCommunicationBus {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AgentCommunicationBus {

@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
-use crate::identity::{AgentResourceLimits, AgentIdentity};
+use crate::identity::{AgentIdentity, AgentResourceLimits};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentChildLimits {
@@ -20,5 +20,8 @@ pub struct AgentPolicy {
 }
 
 pub fn evaluate_permission_inheritance(parent: &AgentIdentity, requested_capability: &str) -> bool {
-    parent.capabilities.contains(&requested_capability.to_string()) || parent.capabilities.contains(&"*".to_string())
+    parent
+        .capabilities
+        .contains(&requested_capability.to_string())
+        || parent.capabilities.contains(&"*".to_string())
 }

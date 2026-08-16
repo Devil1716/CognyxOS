@@ -42,6 +42,7 @@ fn def(id: &str, description: &str, idempotency: Idempotency) -> CapabilityDefin
 
 #[derive(Clone)]
 struct BrowserSessionState {
+    #[allow(dead_code)]
     session_id: String,
     current_url: String,
     #[allow(dead_code)]
@@ -95,9 +96,7 @@ impl UniversalBrowserProvider {
             .await
             .map_err(|e| err(CapabilityErrorCode::Internal, format!("temp dir: {e}")))?;
 
-        let path = self
-            .temp_dir
-            .join(format!("browser_{}.js", Uuid::now_v7()));
+        let path = self.temp_dir.join(format!("browser_{}.js", Uuid::now_v7()));
         fs::write(&path, script)
             .await
             .map_err(|e| err(CapabilityErrorCode::Internal, format!("write script: {e}")))?;
@@ -370,7 +369,9 @@ impl CapabilityProvider for UniversalBrowserProvider {
                 let selector = input
                     .get("selector")
                     .and_then(Value::as_str)
-                    .ok_or_else(|| err(CapabilityErrorCode::InvalidInput, "input.selector required"))?
+                    .ok_or_else(|| {
+                        err(CapabilityErrorCode::InvalidInput, "input.selector required")
+                    })?
                     .replace('\'', "\\'");
                 let text = input
                     .get("text")
@@ -398,12 +399,10 @@ impl CapabilityProvider for UniversalBrowserProvider {
                     .and_then(Value::as_str)
                     .unwrap_or("");
                 let url = self.session_url(session_id);
-                self.ensure_temp_dir().await.map_err(|e| {
-                    err(CapabilityErrorCode::Internal, format!("temp dir: {e}"))
-                })?;
-                let shot_path = self
-                    .temp_dir
-                    .join(format!("shot_{}.png", Uuid::now_v7()));
+                self.ensure_temp_dir()
+                    .await
+                    .map_err(|e| err(CapabilityErrorCode::Internal, format!("temp dir: {e}")))?;
+                let shot_path = self.temp_dir.join(format!("shot_{}.png", Uuid::now_v7()));
                 let shot_str = shot_path.to_string_lossy().replace('\\', "/");
 
                 let script = format!(
@@ -419,7 +418,10 @@ impl CapabilityProvider for UniversalBrowserProvider {
                 );
                 let _ = self.run_script(&script).await?;
                 let bytes = fs::read(&shot_path).await.map_err(|e| {
-                    err(CapabilityErrorCode::Internal, format!("read screenshot: {e}"))
+                    err(
+                        CapabilityErrorCode::Internal,
+                        format!("read screenshot: {e}"),
+                    )
                 })?;
                 let _ = fs::remove_file(&shot_path).await;
                 use base64::{engine::general_purpose, Engine as _};

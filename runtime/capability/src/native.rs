@@ -101,9 +101,29 @@ impl ApplicationRegistry {
         found
     }
     pub fn find(&self, id: &str) -> Option<ApplicationRecord> {
+        if let Some(application) = self
+            .entries
+            .read()
+            .expect("application registry lock")
+            .iter()
+            .find(|application| application.application_id == id)
+            .cloned()
+        {
+            return Some(application);
+        }
         self.discover()
             .into_iter()
             .find(|app| app.application_id == id)
+    }
+
+    pub fn remember(&self, application: ApplicationRecord) {
+        let mut entries = self.entries.write().expect("application registry lock");
+        if !entries
+            .iter()
+            .any(|known| known.application_id == application.application_id)
+        {
+            entries.push(application);
+        }
     }
 }
 
@@ -178,7 +198,44 @@ impl CapabilityProvider for NativeApplicationProvider {
                         err(CapabilityErrorCode::InvalidInput, "input.query is required")
                     })?
                     .to_ascii_lowercase();
-                json!({"applications": Self::records_json(records.into_iter().filter(|a| a.name.to_ascii_lowercase().contains(&query) || a.display_name.to_ascii_lowercase().contains(&query)).collect())})
+                let mut matched: Vec<ApplicationRecord> = records
+                    .into_iter()
+                    .filter(|a| {
+                        a.name.to_ascii_lowercase().contains(&query)
+                            || a.display_name.to_ascii_lowercase().contains(&query)
+                    })
+                    .collect();
+                // Per-dir listing is truncated; exact PATH lookup still finds the named exe.
+                if matched.is_empty() {
+                    let exe_name = if cfg!(target_os = "windows") {
+                        format!("{query}.exe")
+                    } else {
+                        query.clone()
+                    };
+                    for dir in env::split_paths(&env::var_os("PATH").unwrap_or_default()) {
+                        let path = dir.join(&exe_name);
+                        if path.is_file() {
+                            matched.push(ApplicationRecord {
+                                application_id: format!("app:{}", path.to_string_lossy()),
+                                display_name: query.clone(),
+                                name: query.clone(),
+                                executable: path,
+                                runtime_id: self.runtime_id.clone(),
+                            });
+                            break;
+                        }
+                    }
+                }
+                if matched.is_empty() {
+                    return Err(err(
+                        CapabilityErrorCode::ApplicationNotFound,
+                        format!("no dynamically discovered application matches '{query}'"),
+                    ));
+                }
+                for application in &matched {
+                    self.registry.remember(application.clone());
+                }
+                json!({"applications": Self::records_json(matched)})
             }
             "application.inspect" => {
                 let id = context
@@ -218,10 +275,121 @@ impl CapabilityProvider for NativeApplicationProvider {
                         "application must be dynamically discovered before it can be opened",
                     )
                 })?;
-                let child = std::process::Command::new(&app.executable)
+                #[cfg(target_os = "windows")]
+                let gui_test = crate::gui_test::enabled();
+                #[cfg(target_os = "windows")]
+                let title_hint = if gui_test {
+                    crate::gui_test::GOLDEN_TITLE_MARKER.to_string()
+                } else if app.display_name.is_empty() {
+                    app.name.clone()
+                } else {
+                    app.display_name.clone()
+                };
+                #[cfg(target_os = "windows")]
+                let existing_windows = if gui_test {
+                    visible_window_ids()
+                } else {
+                    titled_window_ids(&title_hint)
+                };
+                let mut extra_args: Vec<String> = context
+                    .request
+                    .input
+                    .get("arguments")
+                    .and_then(Value::as_array)
+                    .map(|args| {
+                        args.iter()
+                            .filter_map(Value::as_str)
+                            .map(ToOwned::to_owned)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                #[cfg(target_os = "windows")]
+                let mut test_document = None;
+                #[cfg(target_os = "windows")]
+                let executable = if gui_test {
+                    tracing::info!(
+                        "COGNYX_GUI_TEST=1: restricting application.open to the CognyxOS test workspace"
+                    );
+                    let document = crate::gui_test::ensure_golden_document()
+                        .map_err(|error| err(CapabilityErrorCode::InvalidInput, error))?;
+                    let document_text = document.to_string_lossy().to_string();
+                    if extra_args
+                        .iter()
+                        .any(|argument| crate::gui_test::is_protected_path(argument))
+                    {
+                        return Err(err(
+                            CapabilityErrorCode::InvalidInput,
+                            "TEST_TARGET_UNSAFE: spawn arguments include a protected path",
+                        ));
+                    }
+                    if !extra_args
+                        .iter()
+                        .any(|argument| argument.eq_ignore_ascii_case(&document_text))
+                    {
+                        extra_args.push(document_text.clone());
+                    }
+                    test_document = Some(document_text);
+                    if crate::gui_test::is_notepad_application(
+                        &app.name,
+                        &app.executable.to_string_lossy(),
+                    ) {
+                        crate::gui_test::isolated_notepad_executable()
+                            .unwrap_or_else(|| app.executable.clone())
+                    } else {
+                        app.executable.clone()
+                    }
+                } else {
+                    app.executable.clone()
+                };
+                #[cfg(not(target_os = "windows"))]
+                let executable = app.executable.clone();
+                let mut command = std::process::Command::new(&executable);
+                for argument in &extra_args {
+                    command.arg(argument);
+                }
+                let child = command
                     .spawn()
                     .map_err(|e| err(CapabilityErrorCode::Internal, e.to_string()))?;
-                json!({"application_id": app.application_id, "process_id": child.id(), "status": "started"})
+                let process_id = child.id();
+                #[cfg(target_os = "windows")]
+                let focused =
+                    wait_and_focus_process_window(process_id, &title_hint, existing_windows).await;
+                #[cfg(target_os = "windows")]
+                if let Some((window_id, title)) = &focused {
+                    if crate::gui_test::is_protected_title(title) {
+                        return Err(err(
+                            CapabilityErrorCode::InvalidInput,
+                            format!("TEST_TARGET_UNSAFE: window {window_id} title '{title}' is protected"),
+                        ));
+                    }
+                    if gui_test && !crate::gui_test::is_test_owned_title(title) {
+                        return Err(err(
+                            CapabilityErrorCode::InvalidInput,
+                            format!("TEST_TARGET_UNSAFE: window {window_id} title '{title}' is not the golden test document"),
+                        ));
+                    }
+                }
+                #[cfg(target_os = "windows")]
+                if gui_test && focused.is_none() {
+                    return Err(err(
+                        CapabilityErrorCode::InvalidInput,
+                        "TEST_TARGET_UNSAFE: could not uniquely identify a test-owned window after launch",
+                    ));
+                }
+                #[cfg(not(target_os = "windows"))]
+                let focused: Option<(String, String)> = None;
+                let mut output = json!({"application_id": app.application_id, "process_id": process_id, "status": "started"});
+                if let Some((window_id, title)) = focused {
+                    output["window_id"] = json!(window_id);
+                    output["window_title"] = json!(title);
+                    output["focused"] = json!(true);
+                    output["test_owned"] = json!(crate::gui_test::is_test_owned_title(&title));
+                }
+                #[cfg(target_os = "windows")]
+                if let Some(document) = test_document {
+                    output["test_document"] = json!(document);
+                }
+                output
             }
             _ => {
                 return Err(err(
@@ -706,4 +874,187 @@ pub trait BrowserProvider: Send + Sync {
         capability: &str,
         input: &Value,
     ) -> Result<BrowserResult, CapabilityError>;
+}
+
+#[cfg(target_os = "windows")]
+struct WindowHunt {
+    pid: u32,
+    needle: String,
+    skip: Vec<usize>,
+    hwnd: Option<windows::Win32::Foundation::HWND>,
+    title: String,
+    prefer_pid: bool,
+}
+
+#[cfg(target_os = "windows")]
+async fn wait_and_focus_process_window(
+    pid: u32,
+    title_hint: &str,
+    existing: Vec<usize>,
+) -> Option<(String, String)> {
+    let needle = title_hint.to_ascii_lowercase();
+    for _ in 0..16 {
+        let needle = needle.clone();
+        let skip = existing.clone();
+        if let Some(found) =
+            tokio::task::spawn_blocking(move || find_and_focus_window(pid, needle, skip, true))
+                .await
+                .ok()
+                .flatten()
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            return Some(found);
+        }
+        let needle = title_hint.to_ascii_lowercase();
+        let skip = existing.clone();
+        if let Some(found) =
+            tokio::task::spawn_blocking(move || find_and_focus_window(pid, needle, skip, false))
+                .await
+                .ok()
+                .flatten()
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            return Some(found);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn titled_window_ids(title_hint: &str) -> Vec<usize> {
+    let needle = title_hint.to_ascii_lowercase();
+    let mut ids = Vec::new();
+    collect_titled_windows(&needle, &mut ids);
+    ids
+}
+
+#[cfg(target_os = "windows")]
+fn visible_window_ids() -> Vec<usize> {
+    let mut ids = Vec::new();
+    collect_titled_windows("", &mut ids);
+    ids
+}
+
+#[cfg(target_os = "windows")]
+fn collect_titled_windows(needle: &str, ids: &mut Vec<usize>) {
+    use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, IsWindowVisible};
+
+    struct Collect {
+        needle: String,
+        ids: *mut Vec<usize>,
+    }
+    let mut collect = Collect {
+        needle: needle.to_string(),
+        ids,
+    };
+    unsafe {
+        unsafe extern "system" fn callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            let collect = &mut *(lparam.0 as *mut Collect);
+            if IsWindowVisible(hwnd).as_bool() {
+                let mut title = [0u16; 512];
+                let len = GetWindowTextW(hwnd, &mut title);
+                if len > 0 {
+                    let title =
+                        String::from_utf16_lossy(&title[..len as usize]).to_ascii_lowercase();
+                    if collect.needle.is_empty() || title.contains(&collect.needle) {
+                        (*collect.ids).push(hwnd.0 as usize);
+                    }
+                }
+            }
+            BOOL(1)
+        }
+        let _ = EnumWindows(
+            Some(callback),
+            LPARAM(&mut collect as *mut Collect as isize),
+        );
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn find_and_focus_window(
+    pid: u32,
+    needle: String,
+    skip: Vec<usize>,
+    prefer_pid: bool,
+) -> Option<(String, String)> {
+    use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetClassNameW, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
+    };
+
+    let mut hunt = WindowHunt {
+        pid,
+        needle,
+        skip,
+        hwnd: None,
+        title: String::new(),
+        prefer_pid,
+    };
+    unsafe {
+        unsafe extern "system" fn callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            let hunt = &mut *(lparam.0 as *mut WindowHunt);
+            if !IsWindowVisible(hwnd).as_bool() {
+                return BOOL(1);
+            }
+            let mut window_pid = 0u32;
+            GetWindowThreadProcessId(hwnd, Some(&mut window_pid));
+            let mut class_name = [0u16; 256];
+            let class_len = GetClassNameW(hwnd, &mut class_name);
+            let class_name = if class_len > 0 {
+                String::from_utf16_lossy(&class_name[..class_len as usize])
+            } else {
+                String::new()
+            };
+            if class_name.contains("Popup")
+                || class_name.contains("IME")
+                || class_name.eq_ignore_ascii_case("tooltips_class32")
+            {
+                return BOOL(1);
+            }
+            let mut title = [0u16; 512];
+            let len = GetWindowTextW(hwnd, &mut title);
+            let title = if len > 0 {
+                String::from_utf16_lossy(&title[..len as usize])
+            } else {
+                String::new()
+            };
+            let title_l = title.to_ascii_lowercase();
+            let class_l = class_name.to_ascii_lowercase();
+            let title_matches = !hunt.needle.is_empty() && title_l.contains(&hunt.needle);
+            let class_matches = class_l == hunt.needle || class_l == "notepad";
+            let test_owned = crate::gui_test::is_test_owned_title(&title);
+            if crate::gui_test::is_protected_title(&title) {
+                return BOOL(1);
+            }
+            if hunt.skip.contains(&(hwnd.0 as usize)) {
+                return BOOL(1);
+            }
+            if crate::gui_test::enabled() && !test_owned {
+                return BOOL(1);
+            }
+            if hunt.prefer_pid {
+                if window_pid == hunt.pid && title_matches {
+                    hunt.hwnd = Some(hwnd);
+                    hunt.title = title;
+                    return BOOL(0);
+                }
+                return BOOL(1);
+            }
+            if title_matches && (window_pid == hunt.pid || class_matches) {
+                hunt.hwnd = Some(hwnd);
+                hunt.title = title;
+                return BOOL(0);
+            }
+            BOOL(1)
+        }
+        let _ = EnumWindows(
+            Some(callback),
+            LPARAM(&mut hunt as *mut WindowHunt as isize),
+        );
+        let hwnd = hunt.hwnd?;
+        crate::windows_providers::force_foreground_window(hwnd);
+        Some((format!("hwnd:{}", hwnd.0 as usize), hunt.title))
+    }
 }

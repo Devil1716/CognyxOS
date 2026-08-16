@@ -87,10 +87,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  application list|search <name>|inspect <id>|open <id>|close <id>|focus <id>");
         println!("  browser list|open|navigate <url>");
         println!("  runtime capabilities <runtime>");
+        println!("  plugin create|build|test|install|inspect|enable|disable|remove [name]");
+        println!("  doctor");
         return Ok(());
     }
 
     match args[1].as_str() {
+        "doctor" => {
+            for d in cognyx_hardening::Doctor::run() {
+                let mark = if d.ok { "ok" } else { "FAIL" };
+                println!("[{mark}] {} — {}", d.component, d.detail);
+            }
+        }
+        "plugin" => {
+            let rest: Vec<&str> = args[2..].iter().map(|s| s.as_str()).collect();
+            println!("{}", cognyx_plugin::PluginRegistry::cli(&rest));
+        }
         "agent" => {
             if args.len() < 3 {
                 println!("Subcommands for agent: submit, status, list, inspect, tree, spawn, stop, pause, resume, messages, capabilities, resources, events");
@@ -172,15 +184,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 "capabilities" => {
                     let id = args.get(3).map(String::as_str).unwrap_or("agent-1");
-                    println!("Scoped capabilities for agent '{}': ['filesystem.read', 'browser.read']", id);
+                    println!(
+                        "Scoped capabilities for agent '{}': ['filesystem.read', 'browser.read']",
+                        id
+                    );
                 }
                 "resources" => {
                     let id = args.get(3).map(String::as_str).unwrap_or("agent-1");
-                    println!("Resource quotas for agent '{}': CPU: 50.0%, RAM: 512MB, Max Children: 8", id);
+                    println!(
+                        "Resource quotas for agent '{}': CPU: 50.0%, RAM: 512MB, Max Children: 8",
+                        id
+                    );
                 }
                 "events" => {
                     let id = args.get(3).map(String::as_str).unwrap_or("agent-1");
-                    println!("Event stream for agent '{}': [agent.created, agent.started, agent.ready]", id);
+                    println!(
+                        "Event stream for agent '{}': [agent.created, agent.started, agent.ready]",
+                        id
+                    );
                 }
                 sub => {
                     println!("Executed agent action '{}'", sub);

@@ -19,6 +19,7 @@ pub struct PermissionContext {
 }
 
 pub struct PermissionEngine {
+    #[allow(dead_code)]
     policy_overrides: RwLock<HashSet<String>>,
 }
 
@@ -47,7 +48,9 @@ impl PermissionEngine {
 
         // Restricted / sensitive capability security rules
         match capability {
-            "camera.capture" | "microphone.capture" | "browser.download" | "browser.upload" => PermissionDecision::UserApprovalRequired,
+            "camera.capture" | "microphone.capture" | "browser.download" | "browser.upload" => {
+                PermissionDecision::UserApprovalRequired
+            }
             "filesystem.write" | "filesystem.delete" | "filesystem.move" | "filesystem.copy"
             | "terminal.execute" | "process.start" | "process.stop" | "application.close"
             | "clipboard.read" | "clipboard.write" => {

@@ -3,10 +3,12 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tracing::info;
 
+type SharedRuntime = Arc<tokio::sync::RwLock<Box<dyn ExecutionRuntime + Send + Sync>>>;
+type RuntimeMap = HashMap<String, SharedRuntime>;
+
 #[derive(Default)]
 pub struct RuntimeRegistry {
-    runtimes:
-        RwLock<HashMap<String, Arc<tokio::sync::RwLock<Box<dyn ExecutionRuntime + Send + Sync>>>>>,
+    runtimes: RwLock<RuntimeMap>,
 }
 
 impl RuntimeRegistry {
@@ -35,7 +37,7 @@ impl RuntimeRegistry {
     }
 
     pub async fn find_runtime_for_capability(&self, capability: &str) -> Option<String> {
-        let runtimes: Vec<Arc<tokio::sync::RwLock<Box<dyn ExecutionRuntime + Send + Sync>>>> = {
+        let runtimes: Vec<SharedRuntime> = {
             let map = self.runtimes.read().unwrap();
             map.values().cloned().collect()
         };

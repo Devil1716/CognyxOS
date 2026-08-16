@@ -1,9 +1,15 @@
+use crate::identity::AgentIdentity;
 use dashmap::DashMap;
 use std::sync::Arc;
-use crate::identity::AgentIdentity;
 
 pub struct AgentRegistry {
     agents: DashMap<String, Arc<AgentIdentity>>,
+}
+
+impl Default for AgentRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AgentRegistry {
@@ -30,7 +36,11 @@ impl AgentRegistry {
     }
 
     pub fn get_children(&self, parent_id: &str) -> Vec<Arc<AgentIdentity>> {
-        self.agents.iter().filter(|a| a.parent_agent_id.as_deref() == Some(parent_id)).map(|a| a.clone()).collect()
+        self.agents
+            .iter()
+            .filter(|a| a.parent_agent_id.as_deref() == Some(parent_id))
+            .map(|a| a.clone())
+            .collect()
     }
 
     pub fn get_tree(&self, root_id: &str) -> Vec<Arc<AgentIdentity>> {
@@ -40,7 +50,7 @@ impl AgentRegistry {
     pub fn get_descendants(&self, root_id: &str) -> Vec<Arc<AgentIdentity>> {
         let mut descendants = Vec::new();
         let mut queue = vec![root_id.to_string()];
-        
+
         while let Some(current_id) = queue.pop() {
             let children = self.get_children(&current_id);
             for child in children {
@@ -48,7 +58,7 @@ impl AgentRegistry {
                 descendants.push(child);
             }
         }
-        
+
         descendants
     }
 }

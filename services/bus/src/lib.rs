@@ -1,7 +1,5 @@
 use async_trait::async_trait;
-use cognyx_proto::cognyx::bus::v1::message_bus_service_server::{
-    MessageBusService, MessageBusServiceServer,
-};
+use cognyx_proto::cognyx::bus::v1::message_bus_service_server::MessageBusService;
 use cognyx_proto::cognyx::bus::v1::*;
 use std::sync::Arc;
 use tokio::sync::mpsc;

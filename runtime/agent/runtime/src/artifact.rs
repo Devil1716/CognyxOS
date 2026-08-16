@@ -1,8 +1,8 @@
-use serde::{Serialize, Deserialize};
 use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
+use sha2::Digest;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use sha2::Digest;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ArtifactType {
@@ -81,7 +81,8 @@ impl ArtifactExchange {
     }
 
     pub fn register_artifact(&self, artifact: Artifact) -> Result<(), String> {
-        self.artifacts.insert(artifact.artifact_id.clone(), Arc::new(artifact));
+        self.artifacts
+            .insert(artifact.artifact_id.clone(), Arc::new(artifact));
         Ok(())
     }
 

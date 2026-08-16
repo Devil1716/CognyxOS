@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use crate::role::AgentRole;
 use crate::lifecycle::AgentLifecycleState;
+use crate::role::AgentRole;
+use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,7 +77,13 @@ impl AgentIdentity {
         let aid = agent_id.into();
         let rid = root_agent_id.into();
         let root = match parent_agent_id {
-            Some(_) => if rid.is_empty() { aid.clone() } else { rid },
+            Some(_) => {
+                if rid.is_empty() {
+                    aid.clone()
+                } else {
+                    rid
+                }
+            }
             None => aid.clone(),
         };
         let caps = role.allowed_capabilities();

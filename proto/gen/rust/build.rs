@@ -123,7 +123,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "cargo:rerun-if-changed={}",
-        source_root.join("services/agent_runtime_services.proto").display()
+        source_root
+            .join("services/agent_runtime_services.proto")
+            .display()
     );
 
     tonic_build::configure()

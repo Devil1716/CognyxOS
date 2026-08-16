@@ -1,5 +1,5 @@
 use crate::manifest::ServiceManifest;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

@@ -1,5 +1,4 @@
 use cognyx_agent_kernel::AgentKernelServer;
-use cognyx_execution::LinuxRuntime;
 use cognyx_proto::cognyx::services::agent::v1::agent_kernel_service_server::AgentKernelService;
 use cognyx_proto::cognyx::services::agent::v1::*;
 use cognyx_windows::WindowsRuntime;

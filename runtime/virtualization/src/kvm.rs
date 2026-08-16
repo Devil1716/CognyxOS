@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use std::process::Stdio;
 use tokio::process::Command;
-use tracing::{info, warn};
+use tracing::info;
 
 pub struct KvmBackend {
     vms: DashMap<String, (VirtualMachineConfig, VirtualMachineState)>,

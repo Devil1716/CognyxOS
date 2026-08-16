@@ -1,3 +1,6 @@
+// Generated tonic service methods return `tonic::Status` by value (~176 bytes).
+#![allow(clippy::result_large_err)]
+
 pub mod cognyx {
     pub mod common {
         pub mod v1 {

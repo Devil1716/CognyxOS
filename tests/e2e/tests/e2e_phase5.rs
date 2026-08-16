@@ -4,7 +4,11 @@
 //! marked `#[ignore]` and must be run explicitly:
 //!   cargo test -p cognyx-e2e -- --include-ignored --nocapture
 //!
+//! GUI Notepad tests require COGNYX_GUI_TEST isolation (see docs/windows-gui-testing.md).
 //! Tests of invariants (permission denial, CAPABILITY_UNAVAILABLE) run by default.
+
+#[path = "common/mod.rs"]
+mod common;
 
 use cognyx_agent_core::PermissionContext;
 use cognyx_execution::RuntimeRegistry;
@@ -55,7 +59,10 @@ async fn e2e_permission_block_filesystem_delete() {
         })
         .await;
 
-    assert!(!result.success, "filesystem.delete must be blocked without grant");
+    assert!(
+        !result.success,
+        "filesystem.delete must be blocked without grant"
+    );
     let error = result.error.expect("error must be present");
     assert!(
         error.contains("USER_APPROVAL_REQUIRED"),
@@ -81,7 +88,10 @@ async fn e2e_permission_block_clipboard_read() {
         })
         .await;
 
-    assert!(!result.success, "clipboard.read must be blocked without grant");
+    assert!(
+        !result.success,
+        "clipboard.read must be blocked without grant"
+    );
     let error = result.error.expect("error must be present");
     assert!(
         error.contains("USER_APPROVAL_REQUIRED"),
@@ -208,56 +218,97 @@ async fn e2e_process_list_is_real_and_non_empty() {
 // HARDWARE-ONLY TESTS — require real GUI/display, run with --include-ignored
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Open Notepad, type "Hello CognyxOS", then close it.
+/// Open the dedicated CognyxOS test Notepad instance, type "Hello CognyxOS",
+/// verify text, then close only the owned window.
 /// Requires a Windows machine with a real display.
 #[tokio::test]
 #[ignore]
 #[cfg(target_os = "windows")]
 async fn e2e_open_notepad_and_type_hello_cognyxos() {
+    let mut harness = common::GuiHarness::prepare().expect("test workspace");
     let gw = gateway();
+    harness
+        .reject_leftover_golden_windows(&gw)
+        .await
+        .expect("leftover golden-test window");
+    harness.print_environment("native-application-provider", "Notepad");
 
-    // Open notepad
+    let search = gw
+        .execute_capability(common::GuiHarness::request(
+            "application.search",
+            "Notepad",
+            HashMap::new(),
+        ))
+        .await;
+    println!("application.search: {:?}", search);
+    assert!(
+        search.success,
+        "application.search failed: {:?}",
+        search.error
+    );
+    let parsed: serde_json::Value =
+        serde_json::from_str(&search.output).expect("search output must be JSON");
+    let apps = parsed
+        .get("applications")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let notepad = apps.iter().find(|a| {
+        a.get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .eq_ignore_ascii_case("notepad")
+            || a.get("executable")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_ascii_lowercase()
+                .contains("notepad.exe")
+    });
+    let notepad = notepad.expect("notepad.exe was not discovered on PATH");
+    let app_id = notepad
+        .get("application_id")
+        .and_then(|v| v.as_str())
+        .expect("application_id")
+        .to_string();
+    println!("discovered application_id={app_id}");
+
     let open = gw
-        .execute_capability(CapabilityRequest {
-            request_id: "e2e-notepad-open".into(),
-            task_id: "e2e-notepad".into(),
-            agent_id: "e2e-agent".into(),
-            capability: "application.open".into(),
-            target: "notepad".into(),
-            arguments: vec![],
-            constraints: HashMap::new(),
-            permission_context: PermissionContext {
-                user_id: "e2e-user".into(),
-                session_id: "e2e-session".into(),
-                granted_capabilities: HashSet::from(["application.open".into()]),
-                is_administrator: false,
-            },
-            timeout_seconds: 10,
-        })
+        .execute_capability(common::GuiHarness::request(
+            "application.open",
+            app_id,
+            HashMap::new(),
+        ))
         .await;
     println!("application.open result: {:?}", open);
     assert!(open.success, "Failed to open notepad: {:?}", open.error);
-
-    // Give notepad a moment to appear
-    tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-
-    // Type text
-    let type_result = gw
-        .execute_capability(CapabilityRequest {
-            request_id: "e2e-notepad-type".into(),
-            task_id: "e2e-notepad".into(),
-            agent_id: "e2e-agent".into(),
-            capability: "keyboard.type".into(),
-            target: "Hello CognyxOS".into(),
-            arguments: vec![],
-            constraints: HashMap::new(),
-            permission_context: ctx_with(["keyboard.type"]),
-            timeout_seconds: 5,
-        })
-        .await;
-    println!("keyboard.type result: {:?}", type_result);
-    assert!(type_result.success, "keyboard.type failed: {:?}", type_result.error);
-
+    let owned = harness
+        .claim_from_open(&open.output)
+        .expect("owned window from open");
+    println!("target PID={:?}", owned.process_id);
+    println!("target window_id={}", owned.window_id);
+    harness
+        .verify_focus(&gw, &owned.window_id)
+        .await
+        .expect("focus");
+    println!("TARGET VERIFIED = TRUE");
+    harness
+        .type_text(&gw, &owned.window_id, common::EXPECTED_TEXT)
+        .await
+        .expect("keyboard.type");
+    tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
+    match harness
+        .verify_text(&gw, &owned.window_id, common::EXPECTED_TEXT)
+        .await
+    {
+        Ok(()) => println!("TEXT_VERIFICATION = PASS"),
+        Err(error) => {
+            println!("TEXT_VERIFICATION = FAIL");
+            let _ = harness.cleanup(&gw).await;
+            panic!("{error}");
+        }
+    }
+    let _ = harness.save_owned(&gw, &owned.window_id).await;
+    harness.cleanup(&gw).await.expect("owned cleanup");
     println!("PASS: e2e_open_notepad_and_type_hello_cognyxos completed");
 }
 

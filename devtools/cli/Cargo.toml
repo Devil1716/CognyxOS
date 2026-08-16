@@ -19,6 +19,8 @@ cognyx-proto = { workspace = true }
 cognyx-capability = { path = "../../runtime/capability" }
 
 cognyx-sdk = { workspace = true }
+cognyx-plugin = { path = "../../runtime/plugin" }
+cognyx-hardening = { path = "../../system/hardening" }
 
 [[bin]]
 name = "cognyx"

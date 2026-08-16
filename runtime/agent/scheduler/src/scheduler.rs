@@ -12,14 +12,14 @@ pub struct ScheduledNodeAssignment {
 
 pub struct GraphScheduler {
     registry: Arc<RuntimeRegistry>,
-    resource_manager: Arc<ResourceManager>,
+    _resource_manager: Arc<ResourceManager>,
 }
 
 impl GraphScheduler {
     pub fn new(registry: Arc<RuntimeRegistry>, resource_manager: Arc<ResourceManager>) -> Self {
         Self {
             registry,
-            resource_manager,
+            _resource_manager: resource_manager,
         }
     }
 

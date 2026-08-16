@@ -24,7 +24,11 @@ impl MultiAgentPlanner {
         Self
     }
 
-    pub fn create_multi_agent_plan(&self, task_id: impl Into<String>, _intent: &Intent) -> MultiAgentPlan {
+    pub fn create_multi_agent_plan(
+        &self,
+        task_id: impl Into<String>,
+        _intent: &Intent,
+    ) -> MultiAgentPlan {
         let tid = task_id.into();
         MultiAgentPlan {
             task_id: tid,

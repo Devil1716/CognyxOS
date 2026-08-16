@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><title>CognyxOS Browser Test</title></head>
+<body>
+  <h1 id="heading">CognyxOS local test page</h1>
+  <p id="para">Deterministic paragraph.</p>
+  <input id="field" type="text" />
+  <button id="go">Go</button>
+  <a id="link" href="#out">Jump</a>
+  <table id="tbl"><tr><td>cell</td></tr></table>
+  <div id="out">ready</div>
+  <script>
+    document.getElementById('go').onclick = function() {
+      document.getElementById('out').textContent = 'clicked:' + document.getElementById('field').value;
+    };
+  </script>
+</body>
+</html>
