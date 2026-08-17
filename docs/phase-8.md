@@ -1,6 +1,6 @@
 # Phase 8: AI-native desktop / Cognyx Shell
 
-**Status:** IMPLEMENTED (shell API + desktop model; not a GPU compositor)  
+**Status:** IMPLEMENTED (native egui desktop + shell API; not a hardware compositor)  
 **Last Updated:** 2026-08-14
 
 ## Overview
@@ -18,14 +18,18 @@ directly.
 
 ## Surface
 
-- Desktop, dock/taskbar, launcher, workspace switcher
+- Native desktop window (`cognyx-shell`) with wallpaper, dock/taskbar, launcher, workspace search
 - Command bar (`submit_intent`)
-- Agent panel (task + agent tree)
+- Agent panel (task + agent tree + recover)
 - Human approval: allow once / allow for task / deny (never silent)
 - Computer-use observation of Phase 5 streams (display only)
 - Unified window model (`window_id`, `application_id`, `runtime_id`, ...)
 - Notifications with de-duplication
 - Workspace search via Phase 7 `WorkspaceManager`
+
+The GUI is a renderer for this surface. It still forwards every command through
+`CognyxShell` → `AgentKernelAdapter` → `AgentKernelServer`. It does not plan,
+schedule, or execute capabilities itself.
 
 ## Kernel integration
 

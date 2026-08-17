@@ -419,6 +419,16 @@ impl GuiHarness {
             );
             return Ok(());
         }
+        if let Ok(secs) = std::env::var("COGNYX_GUI_TEST_HOLD_SECS") {
+            if let Ok(n) = secs.parse::<u64>() {
+                if n > 0 {
+                    println!(
+                        "Holding owned Notepad for {n}s so you can inspect it (title='{title}')"
+                    );
+                    tokio::time::sleep(Duration::from_secs(n)).await;
+                }
+            }
+        }
         let _ = gw
             .execute_capability(Self::request(
                 "window.close",

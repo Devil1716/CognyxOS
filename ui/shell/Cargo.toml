@@ -25,6 +25,13 @@ uuid = { workspace = true }
 dashmap = { workspace = true }
 async-trait = { workspace = true }
 tonic = { workspace = true }
+eframe = { version = "0.31.1", default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
 cognyx-service-workspace = { path = "../../services/workspace" }
 cognyx-agent-core = { path = "../../runtime/agent/core" }
 cognyx-agent-kernel = { path = "../../runtime/agent/kernel" }
