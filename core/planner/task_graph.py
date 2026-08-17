@@ -11,7 +11,7 @@ dataclasses.replace (the same pattern ServiceRegistry uses), because task
 nodes are immutable by contract.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from threading import RLock
 
@@ -53,6 +53,7 @@ class Task:
 
     task_id: str
     kind: str
+    input: dict[str, object] = field(default_factory=dict)
     input_schema: str | None = None
     output_schema: str | None = None
     capabilities: tuple[str, ...] = ()
