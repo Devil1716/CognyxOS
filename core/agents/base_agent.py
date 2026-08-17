@@ -7,6 +7,7 @@ from cognyx_runtime.events import Event, EventBus
 
 from core.executor.capability_adapter import CapabilityAdapter
 from core.executor.task_executor import TaskExecutor
+from core.memory.memory_store import MemoryStore
 from core.planner.task_graph import TaskGraph, TaskState
 
 from .lifecycle import AgentLifecycleCoordinator, AgentState
@@ -56,6 +57,7 @@ class BaseAgent:
         lifecycle: AgentLifecycleCoordinator | None = None,
         event_bus: EventBus | None = None,
         publisher: str | None = None,
+        memory_store: MemoryStore | None = None,
     ) -> None:
         if not goal_id:
             raise ValueError("goal_id is required.")
@@ -74,6 +76,7 @@ class BaseAgent:
 
         self.event_bus = event_bus
         self.publisher = publisher
+        self.memory_store = memory_store
 
     @property
     def agent_id(self) -> str:
@@ -238,7 +241,16 @@ class BaseAgent:
         self.begin_reasoning(correlation_id)
         self.begin_execution(correlation_id)
 
-        TaskExecutor(graph, adapter).run_all()
+        # Record execution order at the capability boundary without modifying
+        # the adapter: TaskExecutor calls a recorder that delegates to it.
+        execution: list[tuple[str, bool]] = []
+
+        def recorder(task):
+            outcome = adapter(task)
+            execution.append((task.task_id, outcome))
+            return outcome
+
+        TaskExecutor(graph, recorder).run_all()
 
         failed = [
             task.task_id for task in graph.tasks if task.state == TaskState.FAILED
@@ -252,4 +264,15 @@ class BaseAgent:
 
         self.begin_observation(correlation_id)
         self.return_to_idle(correlation_id)
+
+        if self.memory_store is not None:
+            completed_ids = [task_id for task_id, ok in execution if ok]
+            self.memory_store.set(
+                self.run_id,
+                {
+                    "completed_task_ids": completed_ids,
+                    "outcome": "completed",
+                },
+            )
+
         self.complete(correlation_id)
