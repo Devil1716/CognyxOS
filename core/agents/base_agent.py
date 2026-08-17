@@ -221,6 +221,7 @@ class BaseAgent:
         self,
         graph: TaskGraph,
         adapter: CapabilityAdapter,
+        skip_completed_from_history: bool = False,
     ) -> None:
         """Drive planning/execution over a task graph, then finish the agent.
 
@@ -250,6 +251,14 @@ class BaseAgent:
             execution.append((task.task_id, outcome))
             return outcome
 
+        if skip_completed_from_history:
+            previous = self.recall_previous_run()
+            if previous:
+                previously_completed = set(previous.get("completed_task_ids", []))
+                for task in graph.tasks:
+                    if task.task_id in previously_completed:
+                        graph.transition(task.task_id, TaskState.COMPLETED)
+
         TaskExecutor(graph, recorder).run_all()
 
         failed = [
@@ -266,7 +275,16 @@ class BaseAgent:
         self.return_to_idle(correlation_id)
 
         if self.memory_store is not None:
-            completed_ids = [task_id for task_id, ok in execution if ok]
+            # Build completed_ids from the graph's final state, not the
+            # execution list: tasks pre-completed via resume never pass
+            # through the recorder, but both resumed and newly-executed tasks
+            # end up COMPLETED in the graph, so history is preserved across
+            # chained resume runs.
+            completed_ids = [
+                task.task_id
+                for task in graph.tasks
+                if task.state == TaskState.COMPLETED
+            ]
             summary = {
                 "completed_task_ids": completed_ids,
                 "outcome": "completed",
@@ -287,9 +305,10 @@ class BaseAgent:
         MemoryError and is treated as "not found" only; any other exception
         propagates).
 
-        This method is only available to callers; it is NOT invoked
-        automatically during planning, and nothing in run_task_graph reads
-        it to influence decisions - that wiring is deliberately future work.
+        By default this is only available to callers and does not influence
+        decisions; run_task_graph consults it only when the caller opts in
+        with skip_completed_from_history=True. Automatic, decision-driving
+        planning from memory remains future work.
         """
         if self.memory_store is None:
             return None
