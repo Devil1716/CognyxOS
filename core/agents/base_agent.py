@@ -7,7 +7,7 @@ from cognyx_runtime.events import Event, EventBus
 
 from core.executor.capability_adapter import CapabilityAdapter
 from core.executor.task_executor import TaskExecutor
-from core.memory.memory_store import MemoryStore
+from core.memory.memory_store import MemoryError, MemoryStore
 from core.planner.task_graph import TaskGraph, TaskState
 
 from .lifecycle import AgentLifecycleCoordinator, AgentState
@@ -267,12 +267,36 @@ class BaseAgent:
 
         if self.memory_store is not None:
             completed_ids = [task_id for task_id, ok in execution if ok]
-            self.memory_store.set(
-                self.run_id,
-                {
-                    "completed_task_ids": completed_ids,
-                    "outcome": "completed",
-                },
-            )
+            summary = {
+                "completed_task_ids": completed_ids,
+                "outcome": "completed",
+            }
+            self.memory_store.set(self.run_id, summary)
+            # The agent_id key always holds the most recent successful run's
+            # summary (overwritten, never a growing history); run_id stays
+            # per-run so each individual run keeps its own record too.
+            self.memory_store.set(self.agent_id, summary)
 
         self.complete(correlation_id)
+
+    def recall_previous_run(self) -> dict | None:
+        """Return this agent's most recent successful run summary.
+
+        Returns None when no memory store is provided, or when nothing has
+        been recorded under self.agent_id yet (a missing key surfaces as
+        MemoryError and is treated as "not found" only; any other exception
+        propagates).
+
+        This method is only available to callers; it is NOT invoked
+        automatically during planning, and nothing in run_task_graph reads
+        it to influence decisions - that wiring is deliberately future work.
+        """
+        if self.memory_store is None:
+            return None
+
+        try:
+            value = self.memory_store.get(self.agent_id)
+        except MemoryError:
+            return None
+
+        return value if isinstance(value, dict) else None
