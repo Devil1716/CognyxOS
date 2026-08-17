@@ -5,6 +5,10 @@ from uuid import uuid4
 
 from cognyx_runtime.events import Event, EventBus
 
+from core.executor.capability_adapter import CapabilityAdapter
+from core.executor.task_executor import TaskExecutor
+from core.planner.task_graph import TaskGraph, TaskState
+
 from .lifecycle import AgentLifecycleCoordinator, AgentState
 
 
@@ -209,3 +213,43 @@ class BaseAgent:
             reason="Agent shutdown requested.",
             correlation_id=correlation_id,
         )
+
+    def run_task_graph(
+        self,
+        graph: TaskGraph,
+        adapter: CapabilityAdapter,
+    ) -> None:
+        """Drive planning/execution over a task graph, then finish the agent.
+
+        Uses only this agent's existing lifecycle methods. It plans, reasons,
+        executes, runs ``TaskExecutor(graph, adapter).run_all()``, then ends on
+        COMPLETED when every task succeeded or on FAILED when any task failed
+        (the failure reason names the failed task IDs).
+
+        Lifecycle note: fail() is only reachable from the initializing,
+        executing, or recovering states - never from observing or idle. So the
+        failure branch must call fail() while the agent is still in Executing,
+        and only the success branch advances through observation to Completed.
+        This mirrors, rather than alters, the existing transition rules.
+        """
+        correlation_id = self.run_id
+
+        self.start_planning(correlation_id)
+        self.begin_reasoning(correlation_id)
+        self.begin_execution(correlation_id)
+
+        TaskExecutor(graph, adapter).run_all()
+
+        failed = [
+            task.task_id for task in graph.tasks if task.state == TaskState.FAILED
+        ]
+        if failed:
+            self.fail(
+                correlation_id,
+                reason="Tasks failed: " + ", ".join(failed),
+            )
+            return
+
+        self.begin_observation(correlation_id)
+        self.return_to_idle(correlation_id)
+        self.complete(correlation_id)
