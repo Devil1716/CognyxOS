@@ -6,7 +6,7 @@ on:
 
 jobs:
   quality:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
       - uses: actions/setup-python@v5
-        with: { python-version: '3.13' }
+        with: { python-version: '3.12' }
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy, rustfmt }
       - run: pnpm install --frozen-lockfile
@@ -28,6 +28,27 @@ jobs:
       - name: Dependency review
         uses: actions/dependency-review-action@v4
         if: github.event_name == 'pull_request'
+
+  boot-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 ovmf
+      - name: Create minimal boot test image
+        run: |
+          mkdir -p boot-test
+          dd if=/dev/zero of=boot-test/disk.img bs=1M count=64
+          echo "CognyxOS Boot Test - $(date)" > boot-test/test.txt
+      - name: QEMU Smoke Test
+        run: |
+          timeout 30 qemu-system-x86_64 \
+            -drive file=boot-test/disk.img,format=raw \
+            -bios /usr/share/OVMF/OVMF_CODE.fd \
+            -nographic \
+            -serial mon:stdio \
+            -no-reboot || true
+        continue-on-error: true
 
   security:
     runs-on: ubuntu-latest

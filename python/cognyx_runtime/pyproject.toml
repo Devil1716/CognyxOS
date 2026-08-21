@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "cognyx-runtime"
 version = "0.1.0"
 description = "Platform-neutral runtime foundation for CognyxOS."
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = []
 
 [project.optional-dependencies]
@@ -18,7 +18,7 @@ testpaths = ["tests"]
 addopts = "--cov=cognyx_runtime --cov-report=term-missing"
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]

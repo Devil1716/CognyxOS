@@ -1,0 +1,81 @@
+# CognyxOS Host Daemon Configuration
+# This file configures the privileged host daemon (cognyxd)
+
+host:
+  # Unique machine identity
+  machine_id: auto  # Auto-generate from /etc/machine-id
+  
+  # Operating mode: infrastructure | desktop | server
+  mode: infrastructure
+  
+network:
+  # Bridge interface name for VM networking
+  bridge_name: cognyx-br0
+  
+  # NAT subnet for VMs
+  nat_subnet: "10.100.0.0/16"
+  
+  # DNS servers for VMs
+  dns_servers:
+    - "8.8.8.8"
+    - "8.8.4.4"
+    
+storage:
+  # Default storage pool path
+  pool_path: /var/lib/cognyx/storage
+  
+  # Default volume driver: lvm | zfs | btrfs | dir
+  default_driver: dir
+  
+  # Encryption settings
+  encryption:
+    enabled: false
+    keyring: system
+    
+virtualization:
+  # Hypervisor: qemu | firecracker | kvm
+  hypervisor: qemu
+  
+  # Default VM memory (MB)
+  default_memory: 2048
+  
+  # Default vCPUs
+  default_vcpus: 2
+  
+  # GPU passthrough settings
+  gpu_passthrough:
+    enabled: false
+    iommu_group: auto
+    
+security:
+  # Enable IOMMU isolation
+  iommu: true
+  
+  # CPU mitigations
+  cpu_mitigations: true
+  
+  # Audit logging
+  audit: true
+  
+  # Maximum concurrent VMs
+  max_vms: 50
+  
+logging:
+  # Log level: debug | info | warn | error
+  level: info
+  
+  # Log format: json | text
+  format: json
+  
+  # Output: stdout | file | journal
+  output: journal
+
+api:
+  # Unix socket path for IPC
+  socket_path: /run/cognyx/cognyxd.sock
+  
+  # Request timeout (seconds)
+  timeout: 30
+  
+  # Maximum payload size (MB)
+  max_payload_size: 100
